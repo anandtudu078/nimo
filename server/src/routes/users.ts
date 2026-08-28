@@ -51,19 +51,6 @@ router.post('/avatar', auth, upload.single('avatar'), async (req: AuthRequest, r
   }
 })
 
-// Get user profile
-router.get('/:userId', auth, async (req: AuthRequest, res: Response) => {
-  try {
-    const user = await User.findById(req.params.userId).select('-password')
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' })
-    }
-    res.json({ user })
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || 'Failed to get user' })
-  }
-})
-
 // Update profile
 router.put('/me', auth, async (req: AuthRequest, res: Response) => {
   try {
@@ -153,6 +140,19 @@ router.get('/:userId/following', auth, async (req: AuthRequest, res: Response) =
     res.json({ following: user.following })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to get following' })
+  }
+})
+
+// Get user profile
+router.get('/:userId', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.params.userId).select('-password')
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+    res.json({ user })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to get user' })
   }
 })
 

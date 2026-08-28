@@ -99,8 +99,8 @@ router.post('/:id/comment', auth, async (req: AuthRequest, res: Response) => {
     post.comments.push(comment as any)
     await post.save()
 
+    await post.populate({ path: 'comments.author', select: 'username displayName' })
     const newComment = post.comments[post.comments.length - 1]
-    await Post.populate(newComment, { path: 'author', select: 'username displayName' })
 
     // Create notification
     if (post.author.toString() !== req.userId) {

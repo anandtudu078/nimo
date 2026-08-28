@@ -9,6 +9,15 @@
     "dev:server": "cd server && npm run dev",
     "install:all": "cd client && npm install && cd ../server && npm install"
   },
-  "keywords": ["social-media", "instagram", "twitter", "react", "express"],
-  "license": "MIT"
+  "keywords": [
+    "social-media",
+    "instagram",
+    "twitter",
+    "react",
+    "express"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
 }

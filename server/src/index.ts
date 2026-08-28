@@ -7,11 +7,17 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/nimo'
 async function startServer() {
   try {
     console.log('📦 Connecting to MongoDB...')
-    await mongoose.connect(MONGODB_URI, {
+    const options: any = {
       serverSelectionTimeoutMS: 30000,
       connectTimeoutMS: 30000,
       socketTimeoutMS: 30000,
-    })
+    }
+    // For mongodb+srv URIs, Node.js DNS SRV may fail — fallback to direct URI
+    if (!MONGODB_URI.startsWith('mongodb+srv://')) {
+      options.tls = true
+      options.tlsAllowInvalidHostnames = true
+    }
+    await mongoose.connect(MONGODB_URI, options)
     console.log('✅ Connected to MongoDB')
     app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`)
