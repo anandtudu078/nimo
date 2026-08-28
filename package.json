@@ -1,0 +1,14 @@
+{
+  "name": "nimo",
+  "version": "1.0.0",
+  "description": "Nimo - A social media platform combining Instagram and X",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:client": "cd client && npm run dev",
+    "dev:server": "cd server && npm run dev",
+    "install:all": "cd client && npm install && cd ../server && npm install"
+  },
+  "keywords": ["social-media", "instagram", "twitter", "react", "express"],
+  "license": "MIT"
+}

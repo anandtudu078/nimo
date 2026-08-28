@@ -1,0 +1,38 @@
+import express from 'express'
+import cors from 'cors'
+import cookieParser from 'cookie-parser'
+import path from 'path'
+import dotenv from 'dotenv'
+import authRoutes from './routes/auth'
+import postRoutes from './routes/posts'
+import userRoutes from './routes/users'
+import messageRoutes from './routes/messages'
+import notificationRoutes from './routes/notifications'
+import searchRoutes from './routes/search'
+
+dotenv.config()
+
+const app = express()
+
+// Middleware
+app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }))
+app.use(express.json({ limit: '10mb' }))
+app.use(cookieParser())
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+
+// Routes
+app.use('/api/auth', authRoutes)
+app.use('/api/posts', postRoutes)
+app.use('/api/users', userRoutes)
+app.use('/api/messages', messageRoutes)
+app.use('/api/notifications', notificationRoutes)
+app.use('/api/search', searchRoutes)
+
+// Health check
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
+export default app
