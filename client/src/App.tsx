@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import LoadingSpinner from './components/LoadingSpinner'
+import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import FeedPage from './pages/FeedPage'
@@ -21,7 +22,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="flex justify-center items-center h-screen"><LoadingSpinner /></div>
-  if (user) return <Navigate to="/" />
+  if (user) return <Navigate to="/feed" />
   return <>{children}</>
 }
 
@@ -30,15 +31,16 @@ export default function App() {
     <AuthProvider>
       <Router>
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
-          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<FeedPage />} />
-            <Route path="explore" element={<ExplorePage />} />
-            <Route path="notifications" element={<NotificationsPage />} />
-            <Route path="messages" element={<MessagesPage />} />
-            <Route path="create" element={<CreatePostPage />} />
-            <Route path="profile/:userId" element={<ProfilePage />} />
+          <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+            <Route path="/feed" element={<FeedPage />} />
+            <Route path="/explore" element={<ExplorePage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/messages" element={<MessagesPage />} />
+            <Route path="/create" element={<CreatePostPage />} />
+            <Route path="/profile/:userId" element={<ProfilePage />} />
           </Route>
         </Routes>
       </Router>

@@ -1,14 +1,14 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Avatar from './Avatar'
-import { FaHome, FaSearch, FaBell, FaEnvelope, FaUser, FaPenSquare, FaSignOutAlt, FaTimes } from 'react-icons/fa'
+import { FaHome, FaSearch, FaBell, FaEnvelope, FaUser, FaPenSquare, FaSignOutAlt } from 'react-icons/fa'
 
 export default function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
   const navItems = [
-    { to: '/', icon: <FaHome size={24} />, label: 'Home' },
+    { to: '/feed', icon: <FaHome size={24} />, label: 'Home' },
     { to: '/explore', icon: <FaSearch size={24} />, label: 'Explore' },
     { to: '/notifications', icon: <FaBell size={24} />, label: 'Notifications' },
     { to: '/messages', icon: <FaEnvelope size={24} />, label: 'Messages' },

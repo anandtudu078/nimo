@@ -16,7 +16,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await login(email, password)
-      navigate('/')
+      navigate('/feed')
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to login')
     } finally {

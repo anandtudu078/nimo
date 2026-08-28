@@ -37,7 +37,7 @@ export default function CreatePostPage() {
         content,
         images: imageUrls,
       })
-      navigate('/')
+      navigate('/feed')
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create post')
     } finally {

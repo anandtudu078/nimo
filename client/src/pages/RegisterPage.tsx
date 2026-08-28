@@ -22,7 +22,7 @@ export default function RegisterPage() {
     setLoading(true)
     try {
       await register(username, displayName, email, password)
-      navigate('/')
+      navigate('/feed')
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to register')
     } finally {
