@@ -4,7 +4,7 @@ services:
     image: mongo:7
     container_name: nimo-mongodb
     ports:
-      - "27017:27017"
+      - "5000:27017"
     volumes:
       - mongodb_data:/data/db
     environment:
@@ -15,7 +15,7 @@ services:
   # Backend API server
   server:
     build:
-      context: ./server
+      context: .
       dockerfile: Dockerfile
     container_name: nimo-server
     ports:

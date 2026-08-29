@@ -34,8 +34,8 @@ COPY --from=builder /app/server/dist ./dist
 # Create uploads directory
 RUN mkdir -p uploads
 
-# Expose port
-EXPOSE 5000
+# Note: Railway sets PORT dynamically via env var, do NOT hardcode it
+EXPOSE 3000
 
 # Start the server
 CMD ["node", "dist/index.js"]
