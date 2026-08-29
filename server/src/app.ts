@@ -1,5 +1,4 @@
 import express from 'express'
-import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import path from 'path'
 import dotenv from 'dotenv'
@@ -15,8 +14,28 @@ dotenv.config()
 const app = express()
 
 // Middleware
-const allowedOrigin = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '')
-app.use(cors({ origin: allowedOrigin, credentials: true }))
+const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map((o: string) => o.trim().replace(/\/$/, ''))
+console.log('[CORS] Allowed origins:', allowedOrigins)
+
+// Custom CORS middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin
+  if (!origin || allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*')
+    res.setHeader('Access-Control-Allow-Credentials', 'true')
+    res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204)
+    }
+  } else if (req.method === 'OPTIONS') {
+    return res.sendStatus(403)
+  }
+  next()
+})
+
 app.use(express.json({ limit: '10mb' }))
 app.use(cookieParser())
 
