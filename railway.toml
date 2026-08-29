@@ -1,9 +1,12 @@
+# If Railway root dir is set to repo root, this config is used.
+# If Railway root dir is set to server/, server/railway.toml is used instead.
+
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node dist/index.js"
+startCommand = "cd server && node dist/index.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
