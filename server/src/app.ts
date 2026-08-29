@@ -15,7 +15,8 @@ dotenv.config()
 const app = express()
 
 // Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }))
+const allowedOrigin = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '')
+app.use(cors({ origin: allowedOrigin, credentials: true }))
 app.use(express.json({ limit: '10mb' }))
 app.use(cookieParser())
 

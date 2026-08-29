@@ -14,6 +14,7 @@ export default function ProfilePage() {
   const { user: currentUser, updateUser } = useAuth()
   const [profileUser, setProfileUser] = useState<User | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
+  const [likedPosts, setLikedPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'posts' | 'likes'>('posts')
   const [isFollowing, setIsFollowing] = useState(false)
@@ -31,12 +32,14 @@ export default function ProfilePage() {
 
   const fetchProfile = async () => {
     try {
-      const [userRes, postsRes] = await Promise.all([
+      const [userRes, postsRes, likedRes] = await Promise.all([
         api.get(`/users/${userId}`),
         api.get(`/posts/user/${userId}`),
+        api.get(`/posts/user/${userId}/liked`),
       ])
       setProfileUser(userRes.data.user)
       setPosts(postsRes.data.posts)
+      setLikedPosts(likedRes.data.posts)
       setIsFollowing(userRes.data.user.followers.includes(currentUser?._id))
     } catch (error) {
       console.error('Failed to fetch profile')
@@ -201,9 +204,15 @@ export default function ProfilePage() {
                   {editForm.avatar && (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         setEditForm({ ...editForm, avatar: '' })
-                        api.put('/users/me', { avatar: '' })
+                        try {
+                          const res = await api.put('/users/me', { avatar: '' })
+                          setProfileUser(res.data.user)
+                          updateUser(res.data.user)
+                        } catch (error) {
+                          console.error('Failed to remove avatar')
+                        }
                       }}
                       className="text-sm text-red-500 hover:text-red-600 flex items-center gap-1 mt-2"
                     >
@@ -271,14 +280,26 @@ export default function ProfilePage() {
 
       {/* Posts */}
       <div className="px-4 py-4">
-        {posts.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <p className="text-lg font-medium">No posts yet</p>
-          </div>
+        {activeTab === 'posts' ? (
+          posts.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <p className="text-lg font-medium">No posts yet</p>
+            </div>
+          ) : (
+            posts.map((post) => (
+              <PostCard key={post._id} post={post} onDelete={handleDeletePost} />
+            ))
+          )
         ) : (
-          posts.map((post) => (
-            <PostCard key={post._id} post={post} onDelete={handleDeletePost} />
-          ))
+          likedPosts.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <p className="text-lg font-medium">No liked posts yet</p>
+            </div>
+          ) : (
+            likedPosts.map((post) => (
+              <PostCard key={post._id} post={post} />
+            ))
+          )
         )}
       </div>
     </div>

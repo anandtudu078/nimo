@@ -41,6 +41,20 @@ router.get('/feed', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
+// Get user's liked posts
+router.get('/user/:userId/liked', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const posts = await Post.find({ likes: req.params.userId })
+      .sort({ createdAt: -1 })
+      .populate('author', 'username displayName avatar')
+      .populate('comments.author', 'username displayName')
+
+    res.json({ posts })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to fetch liked posts' })
+  }
+})
+
 // Get user posts
 router.get('/user/:userId', auth, async (req: AuthRequest, res: Response) => {
   try {

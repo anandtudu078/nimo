@@ -111,10 +111,10 @@ export default function MessagesPage() {
                 selectedConversation?._id === conv._id ? 'bg-blue-50' : ''
               }`}
             >
-              <Avatar src={conv.participant.avatar} name={conv.participant.displayName} />
+              <Avatar src={conv.participant?.avatar} name={conv.participant?.displayName || 'Unknown'} />
               <div className="flex-1 min-w-0 text-left">
                 <div className="flex items-center justify-between">
-                  <p className="font-semibold truncate">{conv.participant.displayName}</p>
+                  <p className="font-semibold truncate">{conv.participant?.displayName || 'Unknown'}</p>
                   {conv.lastMessage && (
                     <span className="text-xs text-gray-400">
                       {formatDistanceToNow(new Date(conv.lastMessage.createdAt), { addSuffix: true })}
@@ -147,10 +147,10 @@ export default function MessagesPage() {
               >
                 <FaArrowLeft size={20} />
               </button>
-              <Avatar src={selectedConversation.participant.avatar} name={selectedConversation.participant.displayName} />
+              <Avatar src={selectedConversation.participant?.avatar} name={selectedConversation.participant?.displayName || 'Unknown'} />
               <div>
                 <p className="font-semibold">{selectedConversation.participant.displayName}</p>
-                <p className="text-sm text-gray-500">@{selectedConversation.participant.username}</p>
+                <p className="text-sm text-gray-500">@{selectedConversation.participant?.username || ''}</p>
               </div>
             </div>
 

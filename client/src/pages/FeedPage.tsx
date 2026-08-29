@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import PostCard from '../components/PostCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Avatar from '../components/Avatar'
@@ -14,6 +14,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true)
   const [posting, setPosting] = useState(false)
   const [selectedImages, setSelectedImages] = useState<string[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchPosts()
@@ -51,6 +52,21 @@ export default function FeedPage() {
 
   const handleDeletePost = (postId: string) => {
     setPosts(posts.filter(p => p._id !== postId))
+  }
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+    Array.from(files).forEach(file => {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        if (ev.target?.result) {
+          setSelectedImages(prev => [...prev, ev.target!.result as string])
+        }
+      }
+      reader.readAsDataURL(file)
+    })
+    e.target.value = ''
   }
 
   return (
@@ -93,7 +109,8 @@ export default function FeedPage() {
               )}
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
                 <div className="flex gap-4 text-blue-600">
-                  <button type="button" className="hover:bg-blue-50 p-2 rounded-full">
+                  <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="hover:bg-blue-50 p-2 rounded-full">
                     <FaImage size={18} />
                   </button>
                 </div>
