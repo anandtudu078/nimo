@@ -1,38 +1,86 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
-import { FaImage, FaTimes, FaArrowLeft } from 'react-icons/fa'
+import { FaImage, FaTimes, FaArrowLeft, FaSpinner } from 'react-icons/fa'
 
 export default function CreatePostPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [content, setContent] = useState('')
-  const [imageUrls, setImageUrls] = useState<string[]>([])
-  const [imageUrlInput, setImageUrlInput] = useState('')
+  const [imageFiles, setImageFiles] = useState<File[]>([])
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [posting, setPosting] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleAddImage = () => {
-    if (imageUrlInput.trim()) {
-      setImageUrls([...imageUrls, imageUrlInput.trim()])
-      setImageUrlInput('')
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length + imageFiles.length > 4) {
+      setError('Maximum 4 images allowed')
+      return
     }
+
+    // Validate file sizes
+    for (const file of files) {
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Each image must be under 5MB')
+        return
+      }
+    }
+
+    setImageFiles([...imageFiles, ...files])
+
+    // Create previews
+    files.forEach((file) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setImagePreviews((prev) => [...prev, e.target?.result as string])
+      }
+      reader.readAsDataURL(file)
+    })
+
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleRemoveImage = (index: number) => {
-    setImageUrls(imageUrls.filter((_, i) => i !== index))
+    setImageFiles(imageFiles.filter((_, i) => i !== index))
+    setImagePreviews(imagePreviews.filter((_, i) => i !== index))
+  }
+
+  const uploadImages = async (): Promise<string[]> => {
+    if (imageFiles.length === 0) return []
+
+    const formData = new FormData()
+    imageFiles.forEach((file) => {
+      formData.append('images', file)
+    })
+
+    const res = await api.post('/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data.urls
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!content.trim() && imageUrls.length === 0) {
+    if (!content.trim() && imageFiles.length === 0) {
       setError('Please add some content or images')
       return
     }
+
     setPosting(true)
     setError('')
     try {
+      let imageUrls: string[] = []
+      if (imageFiles.length > 0) {
+        setUploading(true)
+        imageUrls = await uploadImages()
+        setUploading(false)
+      }
+
       await api.post('/posts', {
         content,
         images: imageUrls,
@@ -40,6 +88,7 @@ export default function CreatePostPage() {
       navigate('/feed')
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create post')
+      setUploading(false)
     } finally {
       setPosting(false)
     }
@@ -78,12 +127,12 @@ export default function CreatePostPage() {
                 autoFocus
               />
 
-              {/* Image Preview */}
-              {imageUrls.length > 0 && (
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  {imageUrls.map((url, idx) => (
+              {/* Image Preview Grid */}
+              {imagePreviews.length > 0 && (
+                <div className={`grid gap-2 mt-4 ${imagePreviews.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                  {imagePreviews.map((preview, idx) => (
                     <div key={idx} className="relative">
-                      <img src={url} alt="" className="w-full h-32 object-cover rounded-xl" />
+                      <img src={preview} alt="" className="w-full h-40 object-cover rounded-xl" />
                       <button
                         type="button"
                         onClick={() => handleRemoveImage(idx)}
@@ -96,39 +145,33 @@ export default function CreatePostPage() {
                 </div>
               )}
 
-              {/* Add Image URL */}
-              <div className="flex gap-2 mt-4">
-                <input
-                  type="url"
-                  value={imageUrlInput}
-                  onChange={(e) => setImageUrlInput(e.target.value)}
-                  placeholder="Paste image URL..."
-                  className="input-field text-sm flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      handleAddImage()
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={handleAddImage}
-                  className="btn-secondary text-sm"
-                  disabled={!imageUrlInput.trim()}
-                >
-                  Add
-                </button>
-              </div>
+              {/* File Input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                multiple
+                onChange={handleImageSelect}
+                className="hidden"
+              />
             </div>
           </div>
 
           {/* Footer */}
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-800">
             <div className="flex gap-4 text-blue-500">
-              <button type="button" className="hover:bg-blue-500/10 p-2 rounded-full transition-colors">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="hover:bg-blue-500/10 p-2 rounded-full transition-colors"
+                disabled={imageFiles.length >= 4}
+                title={imageFiles.length >= 4 ? 'Max 4 images' : 'Add images'}
+              >
                 <FaImage size={20} />
               </button>
+              <span className="text-sm text-gray-500 self-center">
+                {imageFiles.length}/4 images
+              </span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-500">
@@ -136,10 +179,16 @@ export default function CreatePostPage() {
               </span>
               <button
                 type="submit"
-                disabled={posting || (!content.trim() && imageUrls.length === 0)}
+                disabled={posting || uploading || (!content.trim() && imageFiles.length === 0)}
                 className="btn-primary"
               >
-                {posting ? 'Posting...' : 'Post'}
+                {uploading ? (
+                  <span className="flex items-center gap-2"><FaSpinner className="animate-spin" /> Uploading...</span>
+                ) : posting ? (
+                  'Posting...'
+                ) : (
+                  'Post'
+                )}
               </button>
             </div>
           </div>
