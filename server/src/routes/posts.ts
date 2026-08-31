@@ -26,14 +26,18 @@ router.get('/feed', auth, async (req: AuthRequest, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 20
     const skip = (page - 1) * limit
 
-    const posts = await Post.find()
+    // Exclude posts from blocked users
+    const currentUser = await User.findById(req.userId).select('blockedUsers')
+    const blockedIds = currentUser?.blockedUsers || []
+
+    const posts = await Post.find({ author: { $nin: blockedIds } })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .populate('author', 'username displayName avatar')
       .populate('comments.author', 'username displayName')
 
-    const total = await Post.countDocuments()
+    const total = await Post.countDocuments({ author: { $nin: blockedIds } })
 
     res.json({ posts, total, page, pages: Math.ceil(total / limit) })
   } catch (error: any) {
