@@ -3,8 +3,64 @@ import Post from '../models/Post'
 import User from '../models/User'
 import Notification from '../models/Notification'
 import { auth, AuthRequest } from '../middleware/auth'
+import Hashtag from '../models/Hashtag'
 
 const router = Router()
+
+// Helper: extract hashtags from text
+function extractHashtags(text: string): string[] {
+  const matches = text.match(/#\w+/g)
+  return matches ? [...new Set(matches.map((h) => h.slice(1).toLowerCase()))] : []
+}
+
+// Helper: update hashtag counts
+async function updateHashtags(tags: string[], delta: number) {
+  for (const tag of tags) {
+    if (delta > 0) {
+      await Hashtag.findOneAndUpdate(
+        { tag },
+        { $inc: { count: delta }, $set: { lastUsed: new Date() } },
+        { upsert: true }
+      )
+    } else {
+      const hashtag = await Hashtag.findOne({ tag })
+      if (hashtag) {
+        hashtag.count = Math.max(0, hashtag.count + delta)
+        if (hashtag.count === 0) await hashtag.deleteOne()
+        else await hashtag.save()
+      }
+    }
+  }
+}
+
+// Get trending hashtags
+router.get('/trending', auth, async (_req: AuthRequest, res: Response) => {
+  try {
+    const trending = await Hashtag.find()
+      .sort({ count: -1 })
+      .limit(10)
+      .select('tag count')
+    res.json({ hashtags: trending })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to fetch trending' })
+  }
+})
+
+// Search posts by hashtag
+router.get('/hashtag/:tag', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const tag = req.params.tag.toLowerCase()
+    const regex = new RegExp(`#${tag}\b`, 'i')
+    const posts = await Post.find({ content: regex })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate('author', 'username displayName avatar')
+      .populate('comments.author', 'username displayName')
+    res.json({ posts, tag })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to search hashtags' })
+  }
+})
 
 // Create post
 router.post('/', auth, async (req: AuthRequest, res: Response) => {
@@ -13,6 +69,11 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
     const post = new Post({ author: req.userId, content, images })
     await post.save()
     await post.populate('author', 'username displayName avatar')
+
+    // Track hashtags
+    const tags = extractHashtags(content || '')
+    if (tags.length > 0) await updateHashtags(tags, 1)
+
     res.status(201).json(post)
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to create post' })
@@ -148,9 +209,19 @@ router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not authorized' })
     }
 
+    // Decrement old hashtags
+    const oldTags = extractHashtags(post.content)
+
     if (content !== undefined) post.content = content
     if (images !== undefined) post.images = images
     await post.save()
+
+    // Update hashtags
+    const newTags = extractHashtags(post.content)
+    const removedTags = oldTags.filter((t) => !newTags.includes(t))
+    const addedTags = newTags.filter((t) => !oldTags.includes(t))
+    if (removedTags.length > 0) await updateHashtags(removedTags, -1)
+    if (addedTags.length > 0) await updateHashtags(addedTags, 1)
     await post.populate('author', 'username displayName avatar')
     await post.populate('comments.author', 'username displayName')
 
@@ -170,6 +241,10 @@ router.delete('/:id', auth, async (req: AuthRequest, res: Response) => {
     if (post.author.toString() !== req.userId) {
       return res.status(403).json({ message: 'Not authorized' })
     }
+
+    // Decrement hashtags
+    const tags = extractHashtags(post.content)
+    if (tags.length > 0) await updateHashtags(tags, -1)
 
     await Post.findByIdAndDelete(req.params.id)
     res.json({ message: 'Post deleted' })

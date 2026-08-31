@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { FaHeart, FaComment, FaShare, FaBookmark, FaEllipsisH, FaEdit, FaTrash } from 'react-icons/fa'
 import { formatDistanceToNow } from 'date-fns'
@@ -95,6 +95,23 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
     setEditContent(post.content)
   }
 
+  // Render content with clickable hashtags
+  const renderedContent = useMemo(() => {
+    if (!post.content) return null
+    const parts = post.content.split(/(\s+)/)
+    return parts.map((part, i) => {
+      if (part.startsWith('#') && part.length > 1 && /^#\w+$/.test(part)) {
+        const tag = part.slice(1)
+        return (
+          <Link key={i} to={`/hashtag/${tag}`} className="text-blue-400 hover:underline">
+            {part}
+          </Link>
+        )
+      }
+      return <span key={i}>{part}</span>
+    })
+  }, [post.content])
+
   return (
     <article className="border-b border-gray-800 p-4 hover:bg-gray-950 transition-colors">
       {/* Header */}
@@ -152,7 +169,7 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
           </div>
         </div>
       ) : (
-        <p className="mb-3 whitespace-pre-wrap text-white">{post.content}</p>
+        <p className="mb-3 whitespace-pre-wrap text-white">{renderedContent}</p>
       )}
 
       {/* Image Carousel */}
