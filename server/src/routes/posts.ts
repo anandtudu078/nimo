@@ -174,4 +174,40 @@ router.delete('/:id', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
+// Toggle bookmark
+router.post('/:id/bookmark', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.userId)
+    if (!user) return res.status(404).json({ message: 'User not found' })
+
+    const postId = req.params.id
+    const isBookmarked = user.bookmarks.includes(postId as any)
+
+    if (isBookmarked) {
+      user.bookmarks = user.bookmarks.filter((id) => id.toString() !== postId)
+    } else {
+      user.bookmarks.push(postId as any)
+    }
+    await user.save()
+
+    res.json({ bookmarked: !isBookmarked })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to toggle bookmark' })
+  }
+})
+
+// Get user's bookmarked posts
+router.get('/user/:userId/bookmarks', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.params.userId).populate({
+      path: 'bookmarks',
+      populate: { path: 'author', select: 'username displayName avatar' },
+    })
+    if (!user) return res.status(404).json({ message: 'User not found' })
+    res.json({ posts: user.bookmarks })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to get bookmarks' })
+  }
+})
+
 export default router

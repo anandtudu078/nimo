@@ -1,18 +1,21 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useUnreadCounts } from '../hooks/useUnreadCounts'
 import Avatar from './Avatar'
-import { FaHome, FaSearch, FaBell, FaEnvelope, FaUser, FaPenSquare, FaSignOutAlt } from 'react-icons/fa'
+import { FaHome, FaSearch, FaBell, FaEnvelope, FaUser, FaPenSquare, FaSignOutAlt, FaBookmark } from 'react-icons/fa'
 
 export default function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { messageCount, notificationCount } = useUnreadCounts()
 
   const navItems = [
-    { to: '/feed', icon: <FaHome size={24} />, label: 'Home' },
-    { to: '/explore', icon: <FaSearch size={24} />, label: 'Explore' },
-    { to: '/notifications', icon: <FaBell size={24} />, label: 'Notifications' },
-    { to: '/messages', icon: <FaEnvelope size={24} />, label: 'Messages' },
-    { to: `/profile/${user?._id}`, icon: <FaUser size={24} />, label: 'Profile' },
+    { to: '/feed', icon: <FaHome size={24} />, label: 'Home', badge: 0 },
+    { to: '/explore', icon: <FaSearch size={24} />, label: 'Explore', badge: 0 },
+    { to: '/notifications', icon: <FaBell size={24} />, label: 'Notifications', badge: notificationCount },
+    { to: '/messages', icon: <FaEnvelope size={24} />, label: 'Messages', badge: messageCount },
+    { to: '/bookmarks', icon: <FaBookmark size={24} />, label: 'Bookmarks', badge: 0 },
+    { to: `/profile/${user?._id}`, icon: <FaUser size={24} />, label: 'Profile', badge: 0 },
   ]
 
   const handleLogout = () => {
@@ -39,7 +42,14 @@ export default function Layout() {
                 }`
               }
             >
-              {item.icon}
+              <span className="relative">
+                {item.icon}
+                {item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 bg-blue-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                )}
+              </span>
               <span className="text-lg">{item.label}</span>
             </NavLink>
           ))}

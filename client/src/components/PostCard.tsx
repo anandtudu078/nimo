@@ -24,6 +24,7 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(post.content)
   const [editSaving, setEditSaving] = useState(false)
+  const [bookmarked, setBookmarked] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
 
   const handleLike = async () => {
@@ -77,6 +78,15 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
       console.error('Failed to edit post')
     } finally {
       setEditSaving(false)
+    }
+  }
+
+  const handleBookmark = async () => {
+    try {
+      const res = await api.post(`/posts/${post._id}/bookmark`)
+      setBookmarked(res.data.bookmarked)
+    } catch (error) {
+      console.error('Failed to toggle bookmark')
     }
   }
 
@@ -182,8 +192,8 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
         <button className="flex items-center gap-1.5 hover:text-green-500 transition-colors">
           <FaShare />
         </button>
-        <button className="flex items-center gap-1.5 hover:text-blue-500 transition-colors ml-auto">
-          <FaBookmark />
+        <button onClick={handleBookmark} className={`flex items-center gap-1.5 hover:text-blue-500 transition-colors ml-auto ${bookmarked ? 'text-blue-500' : ''}`}>
+          <FaBookmark fill={bookmarked ? 'currentColor' : 'none'} />
         </button>
       </div>
 
