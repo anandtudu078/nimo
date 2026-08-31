@@ -49,7 +49,7 @@ router.get('/trending', auth, async (_req: AuthRequest, res: Response) => {
 // Search posts by hashtag
 router.get('/hashtag/:tag', auth, async (req: AuthRequest, res: Response) => {
   try {
-    const tag = req.params.tag.toLowerCase()
+    const tag = String(req.params.tag).toLowerCase()
     const regex = new RegExp(`#${tag}\b`, 'i')
     const posts = await Post.find({ content: regex })
       .sort({ createdAt: -1 })
