@@ -29,6 +29,16 @@ router.put('/:id/read', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
+// Get unread count
+router.get('/unread-count', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const count = await Notification.countDocuments({ user: req.userId, read: false })
+    res.json({ count })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to get unread count' })
+  }
+})
+
 // Mark all as read
 router.put('/read-all', auth, async (req: AuthRequest, res: Response) => {
   try {

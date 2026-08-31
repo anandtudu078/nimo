@@ -4,7 +4,7 @@ import api from '../services/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Avatar from '../components/Avatar'
 import { formatDistanceToNow } from 'date-fns'
-import { FaHeart, FaComment, FaUserPlus, FaAt } from 'react-icons/fa'
+import { FaHeart, FaComment, FaUserPlus, FaAt, FaCheckDouble } from 'react-icons/fa'
 
 interface Notification {
   _id: string
@@ -32,6 +32,15 @@ export default function NotificationsPage() {
       console.error('Failed to fetch notifications')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const markAllAsRead = async () => {
+    try {
+      await api.put('/notifications/read-all')
+      setNotifications(notifications.map(n => ({ ...n, read: true })))
+    } catch (error) {
+      console.error('Failed to mark all as read')
     }
   }
 
@@ -74,7 +83,7 @@ export default function NotificationsPage() {
     <div>
       <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 border-b border-gray-800 p-4">
         <h1 className="text-xl font-bold mb-3 text-white">Notifications</h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setFilter('all')}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
@@ -91,6 +100,15 @@ export default function NotificationsPage() {
           >
             Mentions
           </button>
+          {notifications.some(n => !n.read) && (
+            <button
+              onClick={markAllAsRead}
+              className="ml-auto px-4 py-1.5 rounded-full text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors flex items-center gap-1.5"
+            >
+              <FaCheckDouble size={12} />
+              Mark all read
+            </button>
+          )}
         </div>
       </div>
 
