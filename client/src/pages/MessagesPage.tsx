@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useSocket } from '../hooks/useSocket'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Avatar from '../components/Avatar'
 import { formatDistanceToNow } from 'date-fns'
@@ -22,13 +23,28 @@ interface Message {
 
 export default function MessagesPage() {
   const { user } = useAuth()
+  const {
+    connected,
+    joinConversation,
+    leaveConversation,
+    sendMessage: socketSendMessage,
+    startTyping,
+    stopTyping,
+    onNewMessage,
+    onNewMessageNotification,
+    onUserTyping,
+    onUserTypingStop,
+  } = useSocket()
+
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
 
   useEffect(() => {
     fetchConversations()
@@ -37,8 +53,71 @@ export default function MessagesPage() {
   useEffect(() => {
     if (selectedConversation) {
       fetchMessages(selectedConversation._id)
+      joinConversation(selectedConversation._id)
+    }
+    return () => {
+      if (selectedConversation) {
+        leaveConversation(selectedConversation._id)
+      }
     }
   }, [selectedConversation])
+
+  // Listen for real-time messages
+  useEffect(() => {
+    const cleanup = onNewMessage((data: any) => {
+      if (selectedConversation && data.conversationId === selectedConversation._id) {
+        setMessages((prev) => {
+          // Avoid duplicates
+          if (prev.some(m => m._id === data._id)) return prev
+          return [...prev, {
+            _id: data._id || `temp-${Date.now()}`,
+            sender: data.sender,
+            content: data.content,
+            createdAt: data.createdAt,
+          }]
+        })
+      }
+    })
+    return cleanup
+  }, [selectedConversation, onNewMessage])
+
+  // Listen for new message notifications (to update conversation list)
+  useEffect(() => {
+    const cleanup = onNewMessageNotification((data: any) => {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c._id === data.conversationId
+            ? {
+                ...c,
+                lastMessage: {
+                  content: data.message.content,
+                  createdAt: data.message.createdAt,
+                },
+                unreadCount: c._id === selectedConversation?._id ? 0 : c.unreadCount + 1,
+              }
+            : c
+        )
+      )
+    })
+    return cleanup
+  }, [selectedConversation, onNewMessageNotification])
+
+  // Listen for typing indicators
+  useEffect(() => {
+    const cleanup1 = onUserTyping((data: any) => {
+      if (data.conversationId === selectedConversation?._id && data.userId !== user?._id) {
+        setTypingUsers((prev) => new Set(prev).add(data.userId))
+      }
+    })
+    const cleanup2 = onUserTypingStop((data: any) => {
+      setTypingUsers((prev) => {
+        const next = new Set(prev)
+        next.delete(data.userId)
+        return next
+      })
+    })
+    return () => { cleanup1(); cleanup2() }
+  }, [selectedConversation, onUserTyping, onUserTypingStop, user?._id])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -60,9 +139,9 @@ export default function MessagesPage() {
       const res = await api.get(`/messages/${conversationId}`)
       setMessages(res.data.messages)
       await api.put(`/messages/${conversationId}/read`)
-      setConversations(conversations.map(c =>
-        c._id === conversationId ? { ...c, unreadCount: 0 } : c
-      ))
+      setConversations((prev) =>
+        prev.map((c) => (c._id === conversationId ? { ...c, unreadCount: 0 } : c))
+      )
     } catch (error) {
       console.error('Failed to fetch messages')
     }
@@ -71,27 +150,49 @@ export default function MessagesPage() {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMessage.trim() || !selectedConversation) return
+
+    const content = newMessage.trim()
+    setNewMessage('')
     setSending(true)
+
     try {
+      // Send via API (persists to DB) and Socket (real-time)
       const res = await api.post('/messages', {
         conversationId: selectedConversation._id,
-        content: newMessage,
+        content,
       })
-      setMessages([...messages, res.data.message])
-      setNewMessage('')
+      setMessages((prev) => [...prev, res.data.message])
+      socketSendMessage(selectedConversation._id, content)
     } catch (error) {
       console.error('Failed to send message')
+      setNewMessage(content) // Restore on failure
     } finally {
       setSending(false)
     }
   }
+
+  const handleTyping = useCallback(() => {
+    if (!selectedConversation) return
+    startTyping(selectedConversation._id)
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+
+    // Stop typing after 2 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      stopTyping(selectedConversation._id)
+    }, 2000)
+  }, [selectedConversation, startTyping, stopTyping])
 
   return (
     <div className="flex h-[calc(100vh-57px)]">
       {/* Conversations List */}
       <div className={`${selectedConversation ? 'hidden md:block' : ''} w-full md:w-80 border-r border-gray-800 overflow-y-auto`}>
         <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 border-b border-gray-800 p-4">
-          <h1 className="text-xl font-bold text-white">Messages</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold text-white">Messages</h1>
+            {connected && <span className="w-2 h-2 bg-green-500 rounded-full" title="Connected" />}
+          </div>
         </div>
 
         {loading ? (
@@ -149,7 +250,13 @@ export default function MessagesPage() {
               <Avatar src={selectedConversation.participant?.avatar} name={selectedConversation.participant?.displayName || 'Unknown'} />
               <div>
                 <p className="font-semibold text-white">{selectedConversation.participant.displayName}</p>
-                <p className="text-sm text-gray-500">@{selectedConversation.participant?.username || ''}</p>
+                <p className="text-sm text-gray-500">
+                  {typingUsers.size > 0 ? (
+                    <span className="text-blue-400">typing...</span>
+                  ) : (
+                    `@${selectedConversation.participant?.username || ''}`
+                  )}
+                </p>
               </div>
             </div>
 
@@ -183,7 +290,10 @@ export default function MessagesPage() {
                 <input
                   type="text"
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) => {
+                    setNewMessage(e.target.value)
+                    handleTyping()
+                  }}
                   placeholder="Type a message..."
                   className="input-field flex-1"
                 />
