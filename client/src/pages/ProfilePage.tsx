@@ -145,9 +145,9 @@ export default function ProfilePage() {
   return (
     <div>
       {/* Profile Header */}
-      <div className="sticky top-0 bg-white/80 backdrop-blur-md z-10 border-b border-gray-200">
+      <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 border-b border-gray-800">
         <div className="px-4 py-3">
-          <h1 className="text-xl font-bold">{profileUser.displayName}</h1>
+          <h1 className="text-xl font-bold text-white">{profileUser.displayName}</h1>
           <p className="text-sm text-gray-500">{posts.length} posts</p>
         </div>
       </div>
@@ -160,7 +160,7 @@ export default function ProfilePage() {
             {isOwnProfile && !editing && (
               <button
                 onClick={startEditing}
-                className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <FaCamera className="text-white" size={24} />
               </button>
@@ -179,7 +179,7 @@ export default function ProfilePage() {
         {editing ? (
           <div className="mt-4 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Display Name</label>
               <input
                 type="text"
                 value={editForm.displayName}
@@ -189,7 +189,7 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Bio</label>
               <textarea
                 value={editForm.bio}
                 onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
@@ -198,10 +198,10 @@ export default function ProfilePage() {
                 maxLength={160}
                 placeholder="Tell us about yourself..."
               />
-              <p className="text-xs text-gray-400 mt-1">{editForm.bio.length}/160</p>
+              <p className="text-xs text-gray-500 mt-1">{editForm.bio.length}/160</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Profile Picture</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Profile Picture</label>
               <div className="flex items-center gap-4">
                 <Avatar src={editForm.avatar || profileUser.avatar} name={editForm.displayName} size="lg" />
                 <div>
@@ -234,7 +234,7 @@ export default function ProfilePage() {
                           console.error('Failed to remove avatar')
                         }
                       }}
-                      className="text-sm text-red-500 hover:text-red-600 flex items-center gap-1 mt-2"
+                      className="text-sm text-red-500 hover:text-red-400 flex items-center gap-1 mt-2"
                     >
                       <FaTimes size={12} /> Remove
                     </button>
@@ -252,18 +252,18 @@ export default function ProfilePage() {
             </div>
 
             {/* Delete Account Section */}
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <h3 className="text-sm font-medium text-red-600 mb-2">Danger Zone</h3>
+            <div className="mt-6 pt-4 border-t border-gray-800">
+              <h3 className="text-sm font-medium text-red-500 mb-2">Danger Zone</h3>
               {showDeleteConfirm ? (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-sm text-red-700 mb-3">
+                <div className="bg-red-950/30 border border-red-900 rounded-xl p-4">
+                  <p className="text-sm text-red-400 mb-3">
                     Are you sure you want to delete your account? This action cannot be undone. All your posts, followers, and data will be permanently deleted.
                   </p>
                   <div className="flex gap-2">
                     <button
                       onClick={handleDeleteAccount}
                       disabled={deleting}
-                      className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                      className="bg-red-600 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
                     >
                       {deleting ? 'Deleting...' : 'Yes, Delete My Account'}
                     </button>
@@ -278,7 +278,7 @@ export default function ProfilePage() {
               ) : (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="flex items-center gap-2 text-sm text-red-600 hover:text-red-700"
+                  className="flex items-center gap-2 text-sm text-red-500 hover:text-red-400"
                 >
                   <FaTrash size={14} />
                   Delete Account
@@ -288,10 +288,10 @@ export default function ProfilePage() {
           </div>
         ) : (
           <div className="mt-3">
-            <h2 className="text-xl font-bold">{profileUser.displayName}</h2>
+            <h2 className="text-xl font-bold text-white">{profileUser.displayName}</h2>
             <p className="text-gray-500">@{profileUser.username}</p>
             {profileUser.bio && (
-              <p className="mt-2">{profileUser.bio}</p>
+              <p className="mt-2 text-gray-300">{profileUser.bio}</p>
             )}
             <p className="text-sm text-gray-500 mt-2">
               Joined {formatDistanceToNow(new Date(profileUser.createdAt), { addSuffix: true })}
@@ -301,23 +301,23 @@ export default function ProfilePage() {
 
         <div className="flex gap-6 mt-4">
           <div>
-            <span className="font-bold">{profileUser.following?.length || 0}</span>
+            <span className="font-bold text-white">{profileUser.following?.length || 0}</span>
             <span className="text-gray-500 ml-1">Following</span>
           </div>
           <div>
-            <span className="font-bold">{profileUser.followers?.length || 0}</span>
+            <span className="font-bold text-white">{profileUser.followers?.length || 0}</span>
             <span className="text-gray-500 ml-1">Followers</span>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-800">
         <div className="flex">
           <button
             onClick={() => setActiveTab('posts')}
             className={`flex-1 py-3 text-center font-medium transition-colors ${
-              activeTab === 'posts' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:bg-gray-50'
+              activeTab === 'posts' ? 'border-b-2 border-blue-500 text-white' : 'text-gray-500 hover:bg-gray-900'
             }`}
           >
             Posts
@@ -325,7 +325,7 @@ export default function ProfilePage() {
           <button
             onClick={() => setActiveTab('likes')}
             className={`flex-1 py-3 text-center font-medium transition-colors ${
-              activeTab === 'likes' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:bg-gray-50'
+              activeTab === 'likes' ? 'border-b-2 border-blue-500 text-white' : 'text-gray-500 hover:bg-gray-900'
             }`}
           >
             Likes
@@ -334,7 +334,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Posts */}
-      <div className="px-4 py-4">
+      <div>
         {activeTab === 'posts' ? (
           posts.length === 0 ? (
             <div className="text-center py-12 text-gray-500">

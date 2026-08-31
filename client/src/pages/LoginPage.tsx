@@ -25,25 +25,25 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-black p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-blue-600">Nimo</h1>
+          <h1 className="text-4xl font-bold text-white">Nimo</h1>
           <p className="text-gray-500 mt-2">Share moments, start conversations</p>
         </div>
 
-        <div className="card">
-          <h2 className="text-2xl font-bold mb-6 text-center">Sign in to Nimo</h2>
+        <div className="bg-black border border-gray-800 rounded-2xl p-8">
+          <h2 className="text-2xl font-bold mb-6 text-center text-white">Sign in to Nimo</h2>
 
           {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
+            <div className="bg-red-950/50 text-red-400 border border-red-900 p-3 rounded-xl mb-4 text-sm">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Email</label>
               <input
                 type="email"
                 value={email}
@@ -54,7 +54,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Password</label>
               <input
                 type="password"
                 value={password}
@@ -75,7 +75,7 @@ export default function LoginPage() {
 
           <p className="text-center mt-6 text-gray-500">
             Don't have an account?{' '}
-            <Link to="/register" className="text-blue-600 hover:underline font-medium">
+            <Link to="/register" className="text-blue-500 hover:underline font-medium">
               Sign Up
             </Link>
           </p>

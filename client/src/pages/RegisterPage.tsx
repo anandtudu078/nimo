@@ -31,25 +31,25 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-black p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-blue-600">Nimo</h1>
+          <h1 className="text-4xl font-bold text-white">Nimo</h1>
           <p className="text-gray-500 mt-2">Create your account</p>
         </div>
 
-        <div className="card">
-          <h2 className="text-2xl font-bold mb-6 text-center">Join Nimo</h2>
+        <div className="bg-black border border-gray-800 rounded-2xl p-8">
+          <h2 className="text-2xl font-bold mb-6 text-center text-white">Join Nimo</h2>
 
           {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
+            <div className="bg-red-950/50 text-red-400 border border-red-900 p-3 rounded-xl mb-4 text-sm">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Username</label>
               <input
                 type="text"
                 value={username}
@@ -62,7 +62,7 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Display Name</label>
               <input
                 type="text"
                 value={displayName}
@@ -74,7 +74,7 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Email</label>
               <input
                 type="email"
                 value={email}
@@ -85,7 +85,7 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Password</label>
               <input
                 type="password"
                 value={password}
@@ -107,7 +107,7 @@ export default function RegisterPage() {
 
           <p className="text-center mt-6 text-gray-500">
             Already have an account?{' '}
-            <Link to="/login" className="text-blue-600 hover:underline font-medium">
+            <Link to="/login" className="text-blue-500 hover:underline font-medium">
               Sign In
             </Link>
           </p>

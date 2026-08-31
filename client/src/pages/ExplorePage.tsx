@@ -28,8 +28,8 @@ export default function ExplorePage() {
 
   return (
     <div>
-      <div className="sticky top-0 bg-white/80 backdrop-blur-md z-10 border-b border-gray-200 p-4">
-        <h1 className="text-xl font-bold mb-3">Explore</h1>
+      <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 border-b border-gray-800 p-4">
+        <h1 className="text-xl font-bold mb-3 text-white">Explore</h1>
         <form onSubmit={handleSearch}>
           <input
             type="text"
@@ -43,7 +43,7 @@ export default function ExplorePage() {
               type="button"
               onClick={() => setSearchType('users')}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                searchType === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
+                searchType === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
               }`}
             >
               Users
@@ -52,7 +52,7 @@ export default function ExplorePage() {
               type="button"
               onClick={() => setSearchType('posts')}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                searchType === 'posts' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
+                searchType === 'posts' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
               }`}
             >
               Posts
@@ -61,7 +61,7 @@ export default function ExplorePage() {
         </form>
       </div>
 
-      <div className="px-4 py-4">
+      <div>
         {searching ? (
           <LoadingSpinner />
         ) : searchResults.length > 0 ? (
@@ -70,11 +70,11 @@ export default function ExplorePage() {
               <Link
                 key={user._id}
                 to={`/profile/${user._id}`}
-                className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl mb-2 transition-colors"
+                className="flex items-center gap-3 p-4 hover:bg-gray-900 transition-colors border-b border-gray-800"
               >
                 <Avatar src={user.avatar} name={user.displayName} />
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold">{user.displayName}</p>
+                  <p className="font-semibold text-white">{user.displayName}</p>
                   <p className="text-sm text-gray-500 truncate">@{user.username}</p>
                 </div>
               </Link>

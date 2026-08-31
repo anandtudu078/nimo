@@ -21,11 +21,11 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-black">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-gray-200 bg-white flex flex-col sticky top-0 h-screen">
+      <aside className="w-64 border-r border-gray-800 bg-black flex flex-col sticky top-0 h-screen">
         <div className="p-4">
-          <h1 className="text-2xl font-bold text-blue-600">Nimo</h1>
+          <h1 className="text-2xl font-bold text-white">Nimo</h1>
         </div>
 
         <nav className="flex-1 px-2">
@@ -35,7 +35,7 @@ export default function Layout() {
               to={item.to}
               className={({ isActive }) =>
                 `flex items-center gap-4 px-4 py-3 rounded-full mb-1 transition-colors ${
-                  isActive ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-gray-100'
+                  isActive ? 'font-semibold text-white' : 'text-gray-300 hover:bg-gray-900'
                 }`
               }
             >
@@ -54,11 +54,11 @@ export default function Layout() {
         </nav>
 
         {/* User section */}
-        <div className="p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-800">
           <div className="flex items-center gap-3">
             <Avatar src={user?.avatar} name={user?.displayName || ''} />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold truncate">{user?.displayName}</p>
+              <p className="font-semibold truncate text-white">{user?.displayName}</p>
               <p className="text-sm text-gray-500 truncate">@{user?.username}</p>
             </div>
             <button onClick={handleLogout} className="text-gray-500 hover:text-red-500" title="Logout">
@@ -69,28 +69,28 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-2xl border-r border-gray-200 min-h-screen">
+      <main className="flex-1 max-w-2xl border-r border-gray-800 min-h-screen">
         <Outlet />
       </main>
 
       {/* Right Sidebar - Trending */}
       <aside className="w-80 p-4 hidden lg:block">
-        <div className="card sticky top-4">
-          <h2 className="font-bold text-xl mb-4">Trending</h2>
+        <div className="sticky top-4">
+          <h2 className="font-bold text-xl mb-4 text-white">Trending</h2>
           <div className="space-y-4">
-            <div className="cursor-pointer hover:bg-gray-50 p-2 rounded-lg -mx-2">
+            <div className="cursor-pointer hover:bg-gray-900 p-3 rounded-xl transition-colors">
               <p className="text-sm text-gray-500">Technology</p>
-              <p className="font-semibold">#WebDevelopment</p>
+              <p className="font-semibold text-white">#WebDevelopment</p>
               <p className="text-sm text-gray-500">12.5K posts</p>
             </div>
-            <div className="cursor-pointer hover:bg-gray-50 p-2 rounded-lg -mx-2">
+            <div className="cursor-pointer hover:bg-gray-900 p-3 rounded-xl transition-colors">
               <p className="text-sm text-gray-500">Trending in Tech</p>
-              <p className="font-semibold">#AI</p>
+              <p className="font-semibold text-white">#AI</p>
               <p className="text-sm text-gray-500">45.2K posts</p>
             </div>
-            <div className="cursor-pointer hover:bg-gray-50 p-2 rounded-lg -mx-2">
+            <div className="cursor-pointer hover:bg-gray-900 p-3 rounded-xl transition-colors">
               <p className="text-sm text-gray-500">Design</p>
-              <p className="font-semibold">#UIUX</p>
+              <p className="font-semibold text-white">#UIUX</p>
               <p className="text-sm text-gray-500">8.1K posts</p>
             </div>
           </div>

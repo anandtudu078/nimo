@@ -59,7 +59,6 @@ export default function MessagesPage() {
     try {
       const res = await api.get(`/messages/${conversationId}`)
       setMessages(res.data.messages)
-      // Mark as read
       await api.put(`/messages/${conversationId}/read`)
       setConversations(conversations.map(c =>
         c._id === conversationId ? { ...c, unreadCount: 0 } : c
@@ -90,9 +89,9 @@ export default function MessagesPage() {
   return (
     <div className="flex h-[calc(100vh-57px)]">
       {/* Conversations List */}
-      <div className={`${selectedConversation ? 'hidden md:block' : ''} w-full md:w-80 border-r border-gray-200 overflow-y-auto`}>
-        <div className="sticky top-0 bg-white/80 backdrop-blur-md z-10 border-b border-gray-200 p-4">
-          <h1 className="text-xl font-bold">Messages</h1>
+      <div className={`${selectedConversation ? 'hidden md:block' : ''} w-full md:w-80 border-r border-gray-800 overflow-y-auto`}>
+        <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 border-b border-gray-800 p-4">
+          <h1 className="text-xl font-bold text-white">Messages</h1>
         </div>
 
         {loading ? (
@@ -107,16 +106,16 @@ export default function MessagesPage() {
             <button
               key={conv._id}
               onClick={() => setSelectedConversation(conv)}
-              className={`w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors border-b border-gray-100 ${
-                selectedConversation?._id === conv._id ? 'bg-blue-50' : ''
+              className={`w-full flex items-center gap-3 p-4 hover:bg-gray-900 transition-colors border-b border-gray-800 ${
+                selectedConversation?._id === conv._id ? 'bg-gray-900' : ''
               }`}
             >
               <Avatar src={conv.participant?.avatar} name={conv.participant?.displayName || 'Unknown'} />
               <div className="flex-1 min-w-0 text-left">
                 <div className="flex items-center justify-between">
-                  <p className="font-semibold truncate">{conv.participant?.displayName || 'Unknown'}</p>
+                  <p className="font-semibold truncate text-white">{conv.participant?.displayName || 'Unknown'}</p>
                   {conv.lastMessage && (
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-500">
                       {formatDistanceToNow(new Date(conv.lastMessage.createdAt), { addSuffix: true })}
                     </span>
                   )}
@@ -136,20 +135,20 @@ export default function MessagesPage() {
       </div>
 
       {/* Chat View */}
-      <div className={`${selectedConversation ? '' : 'hidden md:flex'} flex-1 flex flex-col bg-gray-50`}>
+      <div className={`${selectedConversation ? '' : 'hidden md:flex'} flex-1 flex flex-col bg-black`}>
         {selectedConversation ? (
           <>
             {/* Chat Header */}
-            <div className="bg-white border-b border-gray-200 p-4 flex items-center gap-3">
+            <div className="bg-black border-b border-gray-800 p-4 flex items-center gap-3">
               <button
                 onClick={() => setSelectedConversation(null)}
-                className="md:hidden text-gray-600 hover:text-gray-800"
+                className="md:hidden text-gray-400 hover:text-white"
               >
                 <FaArrowLeft size={20} />
               </button>
               <Avatar src={selectedConversation.participant?.avatar} name={selectedConversation.participant?.displayName || 'Unknown'} />
               <div>
-                <p className="font-semibold">{selectedConversation.participant.displayName}</p>
+                <p className="font-semibold text-white">{selectedConversation.participant.displayName}</p>
                 <p className="text-sm text-gray-500">@{selectedConversation.participant?.username || ''}</p>
               </div>
             </div>
@@ -165,11 +164,11 @@ export default function MessagesPage() {
                     className={`max-w-xs px-4 py-2 rounded-2xl ${
                       msg.sender === user?._id
                         ? 'bg-blue-600 text-white'
-                        : 'bg-white border border-gray-200'
+                        : 'bg-gray-800 text-white border border-gray-700'
                     }`}
                   >
                     <p>{msg.content}</p>
-                    <p className={`text-xs mt-1 ${msg.sender === user?._id ? 'text-blue-100' : 'text-gray-400'}`}>
+                    <p className={`text-xs mt-1 ${msg.sender === user?._id ? 'text-blue-200' : 'text-gray-500'}`}>
                       {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
                     </p>
                   </div>
@@ -179,7 +178,7 @@ export default function MessagesPage() {
             </div>
 
             {/* Message Input */}
-            <form onSubmit={handleSendMessage} className="bg-white border-t border-gray-200 p-4">
+            <form onSubmit={handleSendMessage} className="bg-black border-t border-gray-800 p-4">
               <div className="flex gap-3">
                 <input
                   type="text"

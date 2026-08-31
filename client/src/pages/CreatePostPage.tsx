@@ -47,18 +47,18 @@ export default function CreatePostPage() {
 
   return (
     <div>
-      <div className="sticky top-0 bg-white/80 backdrop-blur-md z-10 border-b border-gray-200">
+      <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 border-b border-gray-800">
         <div className="px-4 py-3 flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="text-gray-600 hover:text-gray-800">
+          <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-white transition-colors">
             <FaArrowLeft size={20} />
           </button>
-          <h1 className="text-xl font-bold">New Post</h1>
+          <h1 className="text-xl font-bold text-white">New Post</h1>
         </div>
       </div>
 
       <div className="p-4">
         {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
+          <div className="bg-red-950/50 text-red-400 border border-red-900 p-3 rounded-xl mb-4 text-sm">
             {error}
           </div>
         )}
@@ -73,7 +73,7 @@ export default function CreatePostPage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="What's happening?"
-                className="w-full resize-none border-none focus:outline-none text-lg placeholder-gray-400 min-h-[200px]"
+                className="w-full resize-none border-none focus:outline-none text-lg placeholder-gray-500 min-h-[200px] bg-transparent text-white"
                 maxLength={280}
                 autoFocus
               />
@@ -87,7 +87,7 @@ export default function CreatePostPage() {
                       <button
                         type="button"
                         onClick={() => handleRemoveImage(idx)}
-                        className="absolute top-2 right-2 bg-gray-800/70 text-white rounded-full p-1.5 hover:bg-gray-800"
+                        className="absolute top-2 right-2 bg-gray-800/80 text-white rounded-full p-1.5 hover:bg-gray-700 border border-gray-600"
                       >
                         <FaTimes size={12} />
                       </button>
@@ -124,14 +124,14 @@ export default function CreatePostPage() {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
-            <div className="flex gap-4 text-blue-600">
-              <button type="button" className="hover:bg-blue-50 p-2 rounded-full">
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-800">
+            <div className="flex gap-4 text-blue-500">
+              <button type="button" className="hover:bg-blue-500/10 p-2 rounded-full transition-colors">
                 <FaImage size={20} />
               </button>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-gray-500">
                 {content.length}/280
               </span>
               <button

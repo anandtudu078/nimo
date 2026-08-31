@@ -72,13 +72,13 @@ export default function NotificationsPage() {
 
   return (
     <div>
-      <div className="sticky top-0 bg-white/80 backdrop-blur-md z-10 border-b border-gray-200 p-4">
-        <h1 className="text-xl font-bold mb-3">Notifications</h1>
+      <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 border-b border-gray-800 p-4">
+        <h1 className="text-xl font-bold mb-3 text-white">Notifications</h1>
         <div className="flex gap-2">
           <button
             onClick={() => setFilter('all')}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              filter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
+              filter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
             }`}
           >
             All
@@ -86,7 +86,7 @@ export default function NotificationsPage() {
           <button
             onClick={() => setFilter('mentions')}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              filter === 'mentions' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
+              filter === 'mentions' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
             }`}
           >
             Mentions
@@ -107,8 +107,8 @@ export default function NotificationsPage() {
             <div
               key={notification._id}
               onClick={() => markAsRead(notification._id)}
-              className={`flex items-start gap-3 p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
-                !notification.read ? 'bg-blue-50' : ''
+              className={`flex items-start gap-3 p-4 border-b border-gray-800 cursor-pointer hover:bg-gray-950 transition-colors ${
+                !notification.read ? 'bg-blue-950/20' : ''
               }`}
             >
               <div className="mt-1">
@@ -119,7 +119,7 @@ export default function NotificationsPage() {
                   <Avatar src={notification.from.avatar} name={notification.from.displayName} size="sm" />
                   <Link
                     to={`/profile/${notification.from._id}`}
-                    className="font-semibold hover:underline"
+                    className="font-semibold hover:underline text-white"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {notification.from.displayName}
@@ -129,7 +129,7 @@ export default function NotificationsPage() {
                 {notification.post && (
                   <p className="text-sm text-gray-500 mt-1 line-clamp-2">{notification.post.content}</p>
                 )}
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-600 mt-1">
                   {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                 </p>
               </div>

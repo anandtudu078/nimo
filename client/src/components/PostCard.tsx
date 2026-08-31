@@ -86,27 +86,27 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
   }
 
   return (
-    <article className="card mb-4">
+    <article className="border-b border-gray-800 p-4 hover:bg-gray-950 transition-colors">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <Link to={`/profile/${post.author._id}`} className="flex items-center gap-3">
           <Avatar src={post.author.avatar} name={post.author.displayName} />
           <div>
-            <p className="font-semibold hover:underline">{post.author.displayName}</p>
+            <p className="font-semibold hover:underline text-white">{post.author.displayName}</p>
             <p className="text-sm text-gray-500">@{post.author.username}</p>
           </div>
         </Link>
         {user?._id === post.author._id && (
           <div className="relative">
-            <button onClick={() => setShowMenu(!showMenu)} className="text-gray-400 hover:text-gray-600">
+            <button onClick={() => setShowMenu(!showMenu)} className="text-gray-500 hover:text-gray-300 p-2 rounded-full hover:bg-gray-800">
               <FaEllipsisH />
             </button>
             {showMenu && (
-              <div className="absolute right-0 top-8 bg-white shadow-lg rounded-xl border border-gray-100 py-1 z-10 min-w-[140px]">
-                <button onClick={handleEdit} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+              <div className="absolute right-0 top-10 bg-black shadow-xl rounded-xl border border-gray-700 py-1 z-10 min-w-[140px]">
+                <button onClick={handleEdit} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-white hover:bg-gray-900">
                   <FaEdit /> Edit
                 </button>
-                <button onClick={handleDelete} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-gray-50">
+                <button onClick={handleDelete} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-gray-900">
                   <FaTrash /> Delete
                 </button>
               </div>
@@ -121,20 +121,20 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
           <textarea
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
-            className="w-full p-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full p-3 border border-gray-700 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-black text-white placeholder-gray-500"
             rows={3}
             maxLength={280}
           />
           <div className="flex items-center justify-between mt-2">
-            <span className="text-sm text-gray-400">{editContent.length}/280</span>
+            <span className="text-sm text-gray-500">{editContent.length}/280</span>
             <div className="flex gap-2">
-              <button onClick={handleCancelEdit} className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+              <button onClick={handleCancelEdit} className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors">
                 Cancel
               </button>
               <button
                 onClick={handleSaveEdit}
                 disabled={editSaving || !editContent.trim()}
-                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {editSaving ? 'Saving...' : 'Save'}
               </button>
@@ -142,7 +142,7 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
           </div>
         </div>
       ) : (
-        <p className="mb-3 whitespace-pre-wrap">{post.content}</p>
+        <p className="mb-3 whitespace-pre-wrap text-white">{post.content}</p>
       )}
 
       {/* Image Carousel */}
@@ -151,7 +151,7 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
           <img
             src={post.images[currentImageIndex]}
             alt="Post"
-            className="w-full rounded-xl object-cover max-h-96"
+            className="w-full rounded-2xl object-cover max-h-96"
           />
           {post.images.length > 1 && (
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
@@ -160,7 +160,7 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
                   key={idx}
                   onClick={() => setCurrentImageIndex(idx)}
                   className={`w-2 h-2 rounded-full transition-colors ${
-                    idx === currentImageIndex ? 'bg-blue-600' : 'bg-white/60'
+                    idx === currentImageIndex ? 'bg-blue-600' : 'bg-white/40'
                   }`}
                 />
               ))}
@@ -170,7 +170,7 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
       )}
 
       {/* Actions */}
-      <div className="flex items-center gap-6 text-gray-500">
+      <div className="flex items-center gap-6 text-gray-500 mt-1">
         <button onClick={handleLike} className={`flex items-center gap-1.5 hover:text-red-500 transition-colors ${liked ? 'text-red-500' : ''}`}>
           <FaHeart fill={liked ? 'currentColor' : 'none'} />
           <span>{likeCount}</span>
@@ -182,23 +182,23 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
         <button className="flex items-center gap-1.5 hover:text-green-500 transition-colors">
           <FaShare />
         </button>
-        <button className="flex items-center gap-1.5 hover:text-yellow-500 transition-colors ml-auto">
+        <button className="flex items-center gap-1.5 hover:text-blue-500 transition-colors ml-auto">
           <FaBookmark />
         </button>
       </div>
 
       {/* Comments Section */}
       {showComments && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
+        <div className="mt-3 pt-3 border-t border-gray-800">
           {comments.map((comment) => (
             <div key={comment._id} className="flex gap-2 mb-3">
               <Avatar name={comment.author.displayName} size="sm" />
               <div className="flex-1">
-                <div className="bg-gray-50 rounded-2xl px-3 py-2">
-                  <span className="font-semibold text-sm">{comment.author.displayName}</span>
-                  <p className="text-sm">{comment.content}</p>
+                <div className="bg-gray-900 rounded-2xl px-3 py-2">
+                  <span className="font-semibold text-sm text-white">{comment.author.displayName}</span>
+                  <p className="text-sm text-gray-300">{comment.content}</p>
                 </div>
-                <p className="text-xs text-gray-400 mt-1 ml-3">
+                <p className="text-xs text-gray-600 mt-1 ml-3">
                   {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                 </p>
               </div>
