@@ -44,7 +44,7 @@ export default function MessagesPage() {
   const [sending, setSending] = useState(false)
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     fetchConversations()
