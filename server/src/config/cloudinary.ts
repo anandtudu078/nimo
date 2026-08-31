@@ -1,12 +1,21 @@
-import { v2 as cloudinary } from 'cloudinary'
 import multer from 'multer'
 import { Request } from 'express'
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-})
+// Lazy-load cloudinary to prevent startup crash
+let _cloudinary: any = null
+
+async function getCloudinary() {
+  if (!_cloudinary) {
+    const mod = await import('cloudinary')
+    _cloudinary = mod.v2
+    _cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    })
+  }
+  return _cloudinary
+}
 
 // Use memory storage — we upload to Cloudinary via the SDK directly
 const storage = multer.memoryStorage()
@@ -32,6 +41,7 @@ export async function uploadToCloudinary(
   buffer: Buffer,
   filename: string
 ): Promise<string> {
+  const cloudinary = await getCloudinary()
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -41,7 +51,7 @@ export async function uploadToCloudinary(
           { width: 1200, height: 1200, crop: 'limit', quality: 'auto' },
         ],
       },
-      (error, result) => {
+      (error: any, result: any) => {
         if (error) reject(error)
         else resolve(result!.secure_url)
       }
@@ -50,4 +60,10 @@ export async function uploadToCloudinary(
   })
 }
 
-export default cloudinary
+export async function deleteFromCloudinary(url: string): Promise<void> {
+  const cloudinary = await getCloudinary()
+  const parts = url.split('/')
+  const folderAndFile = parts.slice(parts.indexOf('nimo')).join('/')
+  const publicId = folderAndFile.replace(/\.[^.]+$/, '')
+  await cloudinary.uploader.destroy(publicId)
+}

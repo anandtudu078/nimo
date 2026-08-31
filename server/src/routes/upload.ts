@@ -1,5 +1,5 @@
 import { Router, Response } from 'express'
-import { upload, uploadToCloudinary } from '../config/cloudinary'
+import { upload, uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary'
 import { auth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
@@ -12,7 +12,6 @@ router.post('/', auth, upload.array('images', 4), async (req: AuthRequest, res: 
       return res.status(400).json({ message: 'No images uploaded' })
     }
 
-    // Upload each file buffer to Cloudinary
     const urls = await Promise.all(
       files.map((file) => uploadToCloudinary(file.buffer, file.originalname))
     )
@@ -31,14 +30,7 @@ router.delete('/', auth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No URL provided' })
     }
 
-    // Extract public_id from Cloudinary URL
-    const parts = url.split('/')
-    const folderAndFile = parts.slice(parts.indexOf('nimo')).join('/')
-    const publicId = folderAndFile.replace(/\.[^.]+$/, '')
-
-    const { v2: cloudinary } = await import('cloudinary')
-    await cloudinary.uploader.destroy(publicId)
-
+    await deleteFromCloudinary(url)
     res.json({ message: 'Image deleted' })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to delete image' })
