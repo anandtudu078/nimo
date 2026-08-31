@@ -11,6 +11,9 @@ import ExplorePage from './pages/ExplorePage'
 import NotificationsPage from './pages/NotificationsPage'
 import MessagesPage from './pages/MessagesPage'
 import CreatePostPage from './pages/CreatePostPage'
+import BookmarksPage from './pages/BookmarksPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -33,12 +36,15 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/feed" element={<FeedPage />} />
             <Route path="/explore" element={<ExplorePage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/messages" element={<MessagesPage />} />
+            <Route path="/bookmarks" element={<BookmarksPage />} />
             <Route path="/create" element={<CreatePostPage />} />
             <Route path="/profile/:userId" element={<ProfilePage />} />
           </Route>
