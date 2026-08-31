@@ -2,7 +2,9 @@ import { Router, Response } from 'express'
 import multer from 'multer'
 import path from 'path'
 import User from '../models/User'
+import Post from '../models/Post'
 import Notification from '../models/Notification'
+import Message from '../models/Message'
 import { auth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
@@ -153,6 +155,39 @@ router.get('/:userId', auth, async (req: AuthRequest, res: Response) => {
     res.json({ user })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to get user' })
+  }
+})
+
+// Delete account
+router.delete('/me', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId
+
+    // Delete all user's posts
+    await Post.deleteMany({ author: userId })
+
+    // Remove user from all followers/following lists
+    await User.updateMany(
+      { followers: userId },
+      { $pull: { followers: userId } }
+    )
+    await User.updateMany(
+      { following: userId },
+      { $pull: { following: userId } }
+    )
+
+    // Delete all notifications for/from this user
+    await Notification.deleteMany({ $or: [{ user: userId }, { from: userId }] })
+
+    // Delete all messages in conversations involving this user
+    await Message.deleteMany({ sender: userId })
+
+    // Delete the user itself
+    await User.findByIdAndDelete(userId)
+
+    res.json({ message: 'Account deleted successfully' })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to delete account' })
   }
 })
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import PostCard from '../components/PostCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Avatar from '../components/Avatar'
@@ -7,7 +7,7 @@ import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { User, Post } from '../types'
 import { formatDistanceToNow } from 'date-fns'
-import { FaCamera, FaTimes } from 'react-icons/fa'
+import { FaCamera, FaTimes, FaTrash } from 'react-icons/fa'
 
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>()
@@ -23,6 +23,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (userId) {
@@ -80,6 +83,20 @@ export default function ProfilePage() {
   }
 
   const isOwnProfile = currentUser?._id === userId
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true)
+    try {
+      await api.delete('/users/me')
+      localStorage.removeItem('token')
+      window.location.href = '/login'
+    } catch (error) {
+      console.error('Failed to delete account')
+      alert('Failed to delete account. Please try again.')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const startEditing = () => {
     setEditForm({
@@ -233,6 +250,41 @@ export default function ProfilePage() {
               <button onClick={() => setEditing(false)} className="btn-secondary">
                 Cancel
               </button>
+            </div>
+
+            {/* Delete Account Section */}
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <h3 className="text-sm font-medium text-red-600 mb-2">Danger Zone</h3>
+              {showDeleteConfirm ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-sm text-red-700 mb-3">
+                    Are you sure you want to delete your account? This action cannot be undone. All your posts, followers, and data will be permanently deleted.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deleting}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {deleting ? 'Deleting...' : 'Yes, Delete My Account'}
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="btn-secondary text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex items-center gap-2 text-sm text-red-600 hover:text-red-700"
+                >
+                  <FaTrash size={14} />
+                  Delete Account
+                </button>
+              )}
             </div>
           </div>
         ) : (
