@@ -26,6 +26,10 @@ export default function ProfilePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [isBlocked, setIsBlocked] = useState(false)
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
 
   useEffect(() => {
     if (userId) {
@@ -274,6 +278,75 @@ export default function ProfilePage() {
               <button onClick={() => setEditing(false)} className="btn-secondary">
                 Cancel
               </button>
+            </div>
+
+            {/* Change Password Section */}
+            <div className="mt-6 pt-4 border-t border-gray-800">
+              <button
+                onClick={() => setShowPasswordForm(!showPasswordForm)}
+                className="text-sm text-gray-400 hover:text-white transition-colors"
+              >
+                {showPasswordForm ? 'Cancel' : 'Change Password'}
+              </button>
+              {showPasswordForm && (
+                <div className="mt-3 space-y-3">
+                  {passwordError && (
+                    <p className="text-sm text-red-400">{passwordError}</p>
+                  )}
+                  <input
+                    type="password"
+                    value={passwordForm.currentPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                    placeholder="Current password"
+                    className="input-field text-sm"
+                  />
+                  <input
+                    type="password"
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                    placeholder="New password (min 6 characters)"
+                    className="input-field text-sm"
+                  />
+                  <input
+                    type="password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                    placeholder="Confirm new password"
+                    className="input-field text-sm"
+                  />
+                  <button
+                    onClick={async () => {
+                      setPasswordError('')
+                      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+                        setPasswordError('Passwords do not match')
+                        return
+                      }
+                      if (passwordForm.newPassword.length < 6) {
+                        setPasswordError('Password must be at least 6 characters')
+                        return
+                      }
+                      setPasswordSaving(true)
+                      try {
+                        await api.put('/users/me/password', {
+                          currentPassword: passwordForm.currentPassword,
+                          newPassword: passwordForm.newPassword,
+                        })
+                        setShowPasswordForm(false)
+                        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+                        alert('Password updated successfully!')
+                      } catch (err: any) {
+                        setPasswordError(err.response?.data?.message || 'Failed to change password')
+                      } finally {
+                        setPasswordSaving(false)
+                      }
+                    }}
+                    disabled={passwordSaving || !passwordForm.currentPassword || !passwordForm.newPassword}
+                    className="btn-primary text-sm"
+                  >
+                    {passwordSaving ? 'Updating...' : 'Update Password'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Delete Account Section */}
