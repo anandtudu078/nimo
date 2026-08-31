@@ -1,6 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary'
-import { CloudinaryStorage } from 'multer-storage-cloudinary'
 import multer from 'multer'
+import { Request } from 'express'
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -8,24 +8,8 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 })
 
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: async (_req, file) => {
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-    if (!allowedTypes.includes(file.mimetype)) {
-      throw new Error('Only JPEG, PNG, GIF, and WebP images are allowed')
-    }
-    return {
-      folder: 'nimo',
-      format: file.mimetype.split('/')[1] === 'jpeg' ? 'jpg' : file.mimetype.split('/')[1],
-      transformation: [
-        { width: 1200, height: 1200, crop: 'limit', quality: 'auto' },
-      ],
-      public_id: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
-    }
-  },
-})
+// Use memory storage — we upload to Cloudinary via the SDK directly
+const storage = multer.memoryStorage()
 
 export const upload = multer({
   storage,
@@ -33,7 +17,7 @@ export const upload = multer({
     fileSize: 5 * 1024 * 1024, // 5MB per file
     files: 4, // Max 4 images per post
   },
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true)
@@ -42,5 +26,28 @@ export const upload = multer({
     }
   },
 })
+
+// Upload buffer to Cloudinary
+export async function uploadToCloudinary(
+  buffer: Buffer,
+  filename: string
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'nimo',
+        public_id: `${Date.now()}-${filename.replace(/[^a-zA-Z0-9]/g, '')}`,
+        transformation: [
+          { width: 1200, height: 1200, crop: 'limit', quality: 'auto' },
+        ],
+      },
+      (error, result) => {
+        if (error) reject(error)
+        else resolve(result!.secure_url)
+      }
+    )
+    stream.end(buffer)
+  })
+}
 
 export default cloudinary

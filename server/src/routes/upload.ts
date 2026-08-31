@@ -1,5 +1,5 @@
 import { Router, Response } from 'express'
-import { upload } from '../config/cloudinary'
+import { upload, uploadToCloudinary } from '../config/cloudinary'
 import { auth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
@@ -12,7 +12,11 @@ router.post('/', auth, upload.array('images', 4), async (req: AuthRequest, res: 
       return res.status(400).json({ message: 'No images uploaded' })
     }
 
-    const urls = files.map((file) => file.path) // Cloudinary URL
+    // Upload each file buffer to Cloudinary
+    const urls = await Promise.all(
+      files.map((file) => uploadToCloudinary(file.buffer, file.originalname))
+    )
+
     res.json({ urls })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to upload images' })
@@ -28,10 +32,9 @@ router.delete('/', auth, async (req: AuthRequest, res: Response) => {
     }
 
     // Extract public_id from Cloudinary URL
-    // URL format: https://res.cloudinary.com/.../nimo/1234567890-abc123.jpg
     const parts = url.split('/')
     const folderAndFile = parts.slice(parts.indexOf('nimo')).join('/')
-    const publicId = folderAndFile.replace(/\.[^.]+$/, '') // Remove extension
+    const publicId = folderAndFile.replace(/\.[^.]+$/, '')
 
     const { v2: cloudinary } = await import('cloudinary')
     await cloudinary.uploader.destroy(publicId)
