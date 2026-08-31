@@ -8,6 +8,7 @@ import userRoutes from './routes/users'
 import messageRoutes from './routes/messages'
 import notificationRoutes from './routes/notifications'
 import searchRoutes from './routes/search'
+import { apiLimiter, authLimiter, postLimiter } from './middleware/rateLimit'
 
 dotenv.config()
 
@@ -60,12 +61,12 @@ app.use(cookieParser())
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 
 // Routes
-app.use('/api/auth', authRoutes)
-app.use('/api/posts', postRoutes)
-app.use('/api/users', userRoutes)
-app.use('/api/messages', messageRoutes)
-app.use('/api/notifications', notificationRoutes)
-app.use('/api/search', searchRoutes)
+app.use('/api/auth', authLimiter, authRoutes)
+app.use('/api/posts', postLimiter, postRoutes)
+app.use('/api/users', apiLimiter, userRoutes)
+app.use('/api/messages', apiLimiter, messageRoutes)
+app.use('/api/notifications', apiLimiter, notificationRoutes)
+app.use('/api/search', apiLimiter, searchRoutes)
 
 // Health check
 app.get('/api/health', (_req, res) => {
