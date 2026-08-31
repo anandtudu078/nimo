@@ -1,30 +1,41 @@
 import multer from 'multer'
 import { Request } from 'express'
 
-// Lazy-load cloudinary to prevent startup crash
+// Lazy-load cloudinary — use require() with try/catch for max safety
 let _cloudinary: any = null
+let _loadError: string | null = null
 
-async function getCloudinary() {
-  if (!_cloudinary) {
-    const mod = await import('cloudinary')
-    _cloudinary = mod.v2
-    _cloudinary.config({
+function getCloudinary(): any {
+  if (_loadError) throw new Error(_loadError)
+  if (_cloudinary) return _cloudinary
+
+  try {
+    // Use require() instead of import() to avoid ESM/CJS issues
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('cloudinary')
+    const c = mod.v2 || mod
+    c.config({
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
       api_key: process.env.CLOUDINARY_API_KEY,
       api_secret: process.env.CLOUDINARY_API_SECRET,
     })
+    _cloudinary = c
+    return _cloudinary
+  } catch (err: any) {
+    _loadError = `Cloudinary unavailable: ${err.message}`
+    console.error('[Cloudinary]', _loadError)
+    throw new Error('Image upload is temporarily unavailable')
   }
-  return _cloudinary
 }
 
-// Use memory storage — we upload to Cloudinary via the SDK directly
+// Use memory storage
 const storage = multer.memoryStorage()
 
 export const upload = multer({
   storage,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB per file
-    files: 4, // Max 4 images per post
+    fileSize: 5 * 1024 * 1024,
+    files: 4,
   },
   fileFilter: (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
@@ -36,12 +47,11 @@ export const upload = multer({
   },
 })
 
-// Upload buffer to Cloudinary
-export async function uploadToCloudinary(
+export function uploadToCloudinary(
   buffer: Buffer,
   filename: string
 ): Promise<string> {
-  const cloudinary = await getCloudinary()
+  const cloudinary = getCloudinary()
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -60,10 +70,10 @@ export async function uploadToCloudinary(
   })
 }
 
-export async function deleteFromCloudinary(url: string): Promise<void> {
-  const cloudinary = await getCloudinary()
+export function deleteFromCloudinary(url: string): Promise<void> {
+  const cloudinary = getCloudinary()
   const parts = url.split('/')
   const folderAndFile = parts.slice(parts.indexOf('nimo')).join('/')
   const publicId = folderAndFile.replace(/\.[^.]+$/, '')
-  await cloudinary.uploader.destroy(publicId)
+  return cloudinary.uploader.destroy(publicId)
 }
