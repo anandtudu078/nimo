@@ -13,10 +13,11 @@ async function startServer(retries = 3) {
         connectTimeoutMS: 30000,
         socketTimeoutMS: 30000,
       }
-      // Enable TLS for remote MongoDB Atlas connections
-      if (MONGODB_URI.includes('mongodb+srv://') || MONGODB_URI.includes('atlas')) {
+      // mongodb+srv:// always requires TLS
+      if (MONGODB_URI.includes('mongodb+srv://')) {
         options.tls = true
       }
+      console.log(`🔌 Connecting to: ${MONGODB_URI.replace(/:\/\/[^:]+:[^@]+@/, ':***@')}`)
       await mongoose.connect(MONGODB_URI, options)
       console.log('✅ Connected to MongoDB')
       app.listen(PORT, () => {

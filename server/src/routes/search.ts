@@ -14,7 +14,8 @@ router.get('/', auth, async (req: AuthRequest, res: Response) => {
     }
 
     const query = q as string
-    const regex = new RegExp(query, 'i')
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(escapedQuery, 'i')
 
     if (type === 'users') {
       const users = await User.find({

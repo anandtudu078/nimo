@@ -35,7 +35,7 @@ COPY --from=builder /app/server/dist ./dist
 RUN mkdir -p uploads
 
 # Note: Railway sets PORT dynamically via env var, do NOT hardcode it
-EXPOSE 3000
+EXPOSE 5000
 
 # Start the server
 CMD ["node", "dist/index.js"]

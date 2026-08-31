@@ -4,6 +4,10 @@ import User from '../models/User'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
 
+if (!process.env.JWT_SECRET) {
+  console.warn('⚠️  WARNING: JWT_SECRET not set! Using insecure default. Set JWT_SECRET in your environment variables.')
+}
+
 export interface AuthRequest extends Request {
   userId?: string
 }
