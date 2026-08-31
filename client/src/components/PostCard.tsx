@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { FaHeart, FaComment, FaShare, FaBookmark, FaEllipsisH, FaEdit, FaTrash } from 'react-icons/fa'
+import { FaHeart, FaComment, FaShare, FaBookmark, FaEllipsisH, FaEdit, FaTrash, FaFlag } from 'react-icons/fa'
+import ReportModal from './ReportModal'
 import { formatDistanceToNow } from 'date-fns'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -26,6 +27,7 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
   const [editSaving, setEditSaving] = useState(false)
   const [bookmarked, setBookmarked] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [showReport, setShowReport] = useState(false)
 
   const handleLike = async () => {
     try {
@@ -123,23 +125,29 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
             <p className="text-sm text-gray-500">@{post.author.username}</p>
           </div>
         </Link>
-        {user?._id === post.author._id && (
-          <div className="relative">
-            <button onClick={() => setShowMenu(!showMenu)} className="text-gray-500 hover:text-gray-300 p-2 rounded-full hover:bg-gray-800">
-              <FaEllipsisH />
-            </button>
-            {showMenu && (
-              <div className="absolute right-0 top-10 bg-black shadow-xl rounded-xl border border-gray-700 py-1 z-10 min-w-[140px]">
-                <button onClick={handleEdit} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-white hover:bg-gray-900">
-                  <FaEdit /> Edit
+        <div className="relative">
+          <button onClick={() => setShowMenu(!showMenu)} className="text-gray-500 hover:text-gray-300 p-2 rounded-full hover:bg-gray-800">
+            <FaEllipsisH />
+          </button>
+          {showMenu && (
+            <div className="absolute right-0 top-10 bg-black shadow-xl rounded-xl border border-gray-700 py-1 z-10 min-w-[140px]">
+              {user?._id === post.author._id ? (
+                <>
+                  <button onClick={handleEdit} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-white hover:bg-gray-900">
+                    <FaEdit /> Edit
+                  </button>
+                  <button onClick={handleDelete} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-gray-900">
+                    <FaTrash /> Delete
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => { setShowReport(true); setShowMenu(false) }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-gray-900">
+                  <FaFlag /> Report
                 </button>
-                <button onClick={handleDelete} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-gray-900">
-                  <FaTrash /> Delete
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -244,6 +252,9 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
             </button>
           </form>
         </div>
+      )}
+      {showReport && (
+        <ReportModal targetType="post" targetId={post._id} onClose={() => setShowReport(false)} />
       )}
     </article>
   )

@@ -7,7 +7,8 @@ import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { User, Post } from '../types'
 import { formatDistanceToNow } from 'date-fns'
-import { FaCamera, FaTimes, FaTrash, FaBan } from 'react-icons/fa'
+import { FaCamera, FaTimes, FaTrash, FaBan, FaFlag } from 'react-icons/fa'
+import ReportModal from '../components/ReportModal'
 
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>()
@@ -30,6 +31,7 @@ export default function ProfilePage() {
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordError, setPasswordError] = useState('')
+  const [showReport, setShowReport] = useState(false)
 
   useEffect(() => {
     if (userId) {
@@ -200,6 +202,13 @@ export default function ProfilePage() {
                 title={isBlocked ? 'Unblock' : 'Block'}
               >
                 <FaBan size={16} />
+              </button>
+              <button
+                onClick={() => setShowReport(true)}
+                className="p-2 rounded-full border border-gray-700 text-gray-500 hover:text-yellow-500 hover:border-yellow-500 transition-colors"
+                title="Report user"
+              >
+                <FaFlag size={16} />
               </button>
             </div>
           )}
@@ -455,6 +464,9 @@ export default function ProfilePage() {
           )
         )}
       </div>
+      {showReport && (
+        <ReportModal targetType="user" targetId={userId!} onClose={() => setShowReport(false)} />
+      )}
     </div>
   )
 }

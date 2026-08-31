@@ -9,6 +9,7 @@ import messageRoutes from './routes/messages'
 import notificationRoutes from './routes/notifications'
 import searchRoutes from './routes/search'
 import uploadRoutes from './routes/upload'
+import reportRoutes from './routes/reports'
 import { apiLimiter, authLimiter, postLimiter } from './middleware/rateLimit'
 
 dotenv.config()
@@ -69,6 +70,7 @@ app.use('/api/messages', apiLimiter, messageRoutes)
 app.use('/api/notifications', apiLimiter, notificationRoutes)
 app.use('/api/search', apiLimiter, searchRoutes)
 app.use('/api/upload', apiLimiter, uploadRoutes)
+app.use('/api/reports', apiLimiter, reportRoutes)
 
 // Health check
 app.get('/api/health', (_req, res) => {
