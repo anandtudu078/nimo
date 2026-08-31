@@ -1,13 +1,25 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Outlet, NavLink, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useUnreadCounts } from '../hooks/useUnreadCounts'
 import Avatar from './Avatar'
+import api from '../services/api'
 import { FaHome, FaSearch, FaBell, FaEnvelope, FaUser, FaPenSquare, FaSignOutAlt, FaBookmark } from 'react-icons/fa'
+
+interface TrendingTag {
+  tag: string
+  count: number
+}
 
 export default function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { messageCount, notificationCount } = useUnreadCounts()
+  const [trending, setTrending] = useState<TrendingTag[]>([])
+
+  useEffect(() => {
+    api.get('/posts/trending').then((res) => setTrending(res.data.hashtags)).catch(() => {})
+  }, [])
 
   const navItems = [
     { to: '/feed', icon: <FaHome size={24} />, label: 'Home', badge: 0 },
@@ -87,23 +99,24 @@ export default function Layout() {
       <aside className="w-80 p-4 hidden lg:block">
         <div className="sticky top-4">
           <h2 className="font-bold text-xl mb-4 text-white">Trending</h2>
-          <div className="space-y-4">
-            <div className="cursor-pointer hover:bg-gray-900 p-3 rounded-xl transition-colors">
-              <p className="text-sm text-gray-500">Technology</p>
-              <p className="font-semibold text-white">#WebDevelopment</p>
-              <p className="text-sm text-gray-500">12.5K posts</p>
+          {trending.length === 0 ? (
+            <p className="text-sm text-gray-500">No trending hashtags yet</p>
+          ) : (
+            <div className="space-y-1">
+              {trending.map((tag) => (
+                <Link
+                  key={tag.tag}
+                  to={`/hashtag/${tag.tag}`}
+                  className="block hover:bg-gray-900 p-3 rounded-xl transition-colors"
+                >
+                  <p className="font-semibold text-white">#{tag.tag}</p>
+                  <p className="text-sm text-gray-500">
+                    {tag.count} {tag.count === 1 ? 'post' : 'posts'}
+                  </p>
+                </Link>
+              ))}
             </div>
-            <div className="cursor-pointer hover:bg-gray-900 p-3 rounded-xl transition-colors">
-              <p className="text-sm text-gray-500">Trending in Tech</p>
-              <p className="font-semibold text-white">#AI</p>
-              <p className="text-sm text-gray-500">45.2K posts</p>
-            </div>
-            <div className="cursor-pointer hover:bg-gray-900 p-3 rounded-xl transition-colors">
-              <p className="text-sm text-gray-500">Design</p>
-              <p className="font-semibold text-white">#UIUX</p>
-              <p className="text-sm text-gray-500">8.1K posts</p>
-            </div>
-          </div>
+          )}
         </div>
       </aside>
     </div>

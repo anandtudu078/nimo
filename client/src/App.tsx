@@ -14,6 +14,7 @@ import CreatePostPage from './pages/CreatePostPage'
 import BookmarksPage from './pages/BookmarksPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import HashtagPage from './pages/HashtagPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="/bookmarks" element={<BookmarksPage />} />
             <Route path="/create" element={<CreatePostPage />} />
             <Route path="/profile/:userId" element={<ProfilePage />} />
+            <Route path="/hashtag/:tag" element={<HashtagPage />} />
           </Route>
         </Routes>
       </Router>
