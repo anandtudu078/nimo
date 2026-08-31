@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FaHeart, FaComment, FaShare, FaBookmark, FaEllipsisH } from 'react-icons/fa'
+import { FaHeart, FaComment, FaShare, FaBookmark, FaEllipsisH, FaEdit, FaTrash } from 'react-icons/fa'
 import { formatDistanceToNow } from 'date-fns'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -10,9 +10,10 @@ import type { Post } from '../types'
 interface PostCardProps {
   post: Post
   onDelete?: (id: string) => void
+  onEdit?: (id: string, data: { content: string; images: string[] }) => void
 }
 
-export default function PostCard({ post, onDelete }: PostCardProps) {
+export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
   const { user } = useAuth()
   const [liked, setLiked] = useState(post.likes.includes(user?._id || ''))
   const [likeCount, setLikeCount] = useState(post.likes.length)
@@ -20,6 +21,10 @@ export default function PostCard({ post, onDelete }: PostCardProps) {
   const [commentText, setCommentText] = useState('')
   const [comments, setComments] = useState(post.comments)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(post.content)
+  const [editSaving, setEditSaving] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
 
   const handleLike = async () => {
     try {
@@ -44,6 +49,7 @@ export default function PostCard({ post, onDelete }: PostCardProps) {
   }
 
   const handleDelete = async () => {
+    setShowMenu(false)
     if (window.confirm('Delete this post?')) {
       try {
         await api.delete(`/posts/${post._id}`)
@@ -52,6 +58,31 @@ export default function PostCard({ post, onDelete }: PostCardProps) {
         console.error('Failed to delete post')
       }
     }
+  }
+
+  const handleEdit = () => {
+    setIsEditing(true)
+    setEditContent(post.content)
+    setShowMenu(false)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editContent.trim()) return
+    setEditSaving(true)
+    try {
+      const res = await api.put(`/posts/${post._id}`, { content: editContent })
+      onEdit?.(post._id, { content: res.data.content, images: res.data.images })
+      setIsEditing(false)
+    } catch (error) {
+      console.error('Failed to edit post')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setIsEditing(false)
+    setEditContent(post.content)
   }
 
   return (
@@ -66,14 +97,53 @@ export default function PostCard({ post, onDelete }: PostCardProps) {
           </div>
         </Link>
         {user?._id === post.author._id && (
-          <button onClick={handleDelete} className="text-gray-400 hover:text-red-500">
-            <FaEllipsisH />
-          </button>
+          <div className="relative">
+            <button onClick={() => setShowMenu(!showMenu)} className="text-gray-400 hover:text-gray-600">
+              <FaEllipsisH />
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 top-8 bg-white shadow-lg rounded-xl border border-gray-100 py-1 z-10 min-w-[140px]">
+                <button onClick={handleEdit} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  <FaEdit /> Edit
+                </button>
+                <button onClick={handleDelete} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-gray-50">
+                  <FaTrash /> Delete
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {/* Content */}
-      <p className="mb-3 whitespace-pre-wrap">{post.content}</p>
+      {isEditing ? (
+        <div className="mb-3">
+          <textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            className="w-full p-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            rows={3}
+            maxLength={280}
+          />
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-sm text-gray-400">{editContent.length}/280</span>
+            <div className="flex gap-2">
+              <button onClick={handleCancelEdit} className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={editSaving || !editContent.trim()}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {editSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <p className="mb-3 whitespace-pre-wrap">{post.content}</p>
+      )}
 
       {/* Image Carousel */}
       {post.images.length > 0 && (

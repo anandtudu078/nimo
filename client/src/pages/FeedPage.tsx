@@ -54,6 +54,10 @@ export default function FeedPage() {
     setPosts(posts.filter(p => p._id !== postId))
   }
 
+  const handleEditPost = (postId: string, data: { content: string; images: string[] }) => {
+    setPosts(posts.map(p => p._id === postId ? { ...p, ...data } : p))
+  }
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files) return
@@ -143,7 +147,7 @@ export default function FeedPage() {
       ) : (
         <div className="px-4">
           {posts.map((post) => (
-            <PostCard key={post._id} post={post} onDelete={handleDeletePost} />
+            <PostCard key={post._id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} />
           ))}
         </div>
       )}

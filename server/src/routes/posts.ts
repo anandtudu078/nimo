@@ -132,6 +132,30 @@ router.post('/:id/comment', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
+// Edit post
+router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { content, images } = req.body
+    const post = await Post.findById(req.params.id)
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' })
+    }
+    if (post.author.toString() !== req.userId) {
+      return res.status(403).json({ message: 'Not authorized' })
+    }
+
+    if (content !== undefined) post.content = content
+    if (images !== undefined) post.images = images
+    await post.save()
+    await post.populate('author', 'username displayName avatar')
+    await post.populate('comments.author', 'username displayName')
+
+    res.json(post)
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to update post' })
+  }
+})
+
 // Delete post
 router.delete('/:id', auth, async (req: AuthRequest, res: Response) => {
   try {

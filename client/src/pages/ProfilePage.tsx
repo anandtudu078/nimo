@@ -67,6 +67,10 @@ export default function ProfilePage() {
     setPosts(posts.filter(p => p._id !== postId))
   }
 
+  const handleEditPost = (postId: string, data: { content: string; images: string[] }) => {
+    setPosts(posts.map(p => p._id === postId ? { ...p, ...data } : p))
+  }
+
   if (loading) {
     return <LoadingSpinner />
   }
@@ -287,7 +291,7 @@ export default function ProfilePage() {
             </div>
           ) : (
             posts.map((post) => (
-              <PostCard key={post._id} post={post} onDelete={handleDeletePost} />
+              <PostCard key={post._id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} />
             ))
           )
         ) : (
