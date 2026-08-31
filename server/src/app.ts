@@ -19,10 +19,26 @@ const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || 'ht
   .map((o: string) => o.trim().replace(/\/$/, ''))
 console.log('[CORS] Allowed origins:', allowedOrigins)
 
+// Check if origin matches any allowed origin or Vercel preview pattern
+function isOriginAllowed(origin: string): boolean {
+  // Exact match
+  if (allowedOrigins.includes(origin)) return true
+
+  // Allow Vercel preview deployments: nimo-*.vercel.app
+  try {
+    const url = new URL(origin)
+    if (url.hostname.endsWith('.vercel.app') && url.hostname.startsWith('nimo-')) {
+      return true
+    }
+  } catch {}
+
+  return false
+}
+
 // Custom CORS middleware
 app.use((req, res, next) => {
-  const origin = req.headers.origin
-  if (!origin || allowedOrigins.includes(origin)) {
+  const origin = req.headers.origin as string | undefined
+  if (!origin || isOriginAllowed(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*')
     res.setHeader('Access-Control-Allow-Credentials', 'true')
     res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE')
@@ -31,6 +47,7 @@ app.use((req, res, next) => {
       return res.sendStatus(204)
     }
   } else if (req.method === 'OPTIONS') {
+    console.log('[CORS] Blocked origin:', origin)
     return res.sendStatus(403)
   }
   next()
