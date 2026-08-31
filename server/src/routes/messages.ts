@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { Message, Conversation } from '../models/Message'
 import User from '../models/User'
 import { auth, AuthRequest } from '../middleware/auth'
+import { emitToUser } from '../config/socket'
 
 const router = Router()
 
@@ -113,6 +114,20 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
       lastMessage: { content, sender: req.userId, createdAt: new Date() },
       updatedAt: new Date(),
     })
+
+    // Emit real-time event to other participants
+    const conversation = await Conversation.findById(conversationId)
+    if (conversation) {
+      const io = req.app.get('io')
+      conversation.participants.forEach((participantId: any) => {
+        if (participantId.toString() !== req.userId) {
+          emitToUser(io, participantId.toString(), 'new_message_notification', {
+            conversationId,
+            message,
+          })
+        }
+      })
+    }
 
     res.status(201).json({ message })
   } catch (error: any) {
