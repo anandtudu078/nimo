@@ -11,6 +11,8 @@ export interface IUser extends Document {
   website?: string
   followers: mongoose.Types.ObjectId[]
   following: mongoose.Types.ObjectId[]
+  bookmarks: mongoose.Types.ObjectId[]
+  blockedUsers: mongoose.Types.ObjectId[]
   createdAt: Date
   updatedAt: Date
   comparePassword(candidatePassword: string): Promise<boolean>
@@ -27,6 +29,8 @@ const userSchema = new Schema<IUser>(
     website: { type: String, default: '' },
     followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     following: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    bookmarks: [{ type: Schema.Types.ObjectId, ref: 'Post' }],
+    blockedUsers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   },
   { timestamps: true }
 )

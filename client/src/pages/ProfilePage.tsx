@@ -7,7 +7,7 @@ import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { User, Post } from '../types'
 import { formatDistanceToNow } from 'date-fns'
-import { FaCamera, FaTimes, FaTrash } from 'react-icons/fa'
+import { FaCamera, FaTimes, FaTrash, FaBan } from 'react-icons/fa'
 
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>()
@@ -25,6 +25,7 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [isBlocked, setIsBlocked] = useState(false)
 
   useEffect(() => {
     if (userId) {
@@ -47,6 +48,19 @@ export default function ProfilePage() {
       console.error('Failed to fetch profile')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleBlock = async () => {
+    try {
+      const res = await api.post(`/users/${userId}/block`)
+      setIsBlocked(res.data.blocked)
+      if (res.data.blocked) {
+        // If blocking, also unfollow
+        setIsFollowing(false)
+      }
+    } catch (error) {
+      console.error('Failed to block user')
     }
   }
 
@@ -167,12 +181,23 @@ export default function ProfilePage() {
             )}
           </div>
           {!isOwnProfile && (
-            <button
-              onClick={handleFollow}
-              className={isFollowing ? 'btn-secondary' : 'btn-primary'}
-            >
-              {isFollowing ? 'Following' : 'Follow'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleFollow}
+                className={isFollowing ? 'btn-secondary' : 'btn-primary'}
+              >
+                {isFollowing ? 'Following' : 'Follow'}
+              </button>
+              <button
+                onClick={handleBlock}
+                className={`p-2 rounded-full border transition-colors ${
+                  isBlocked ? 'border-red-500 text-red-500 bg-red-500/10' : 'border-gray-700 text-gray-500 hover:text-red-500 hover:border-red-500'
+                }`}
+                title={isBlocked ? 'Unblock' : 'Block'}
+              >
+                <FaBan size={16} />
+              </button>
+            </div>
           )}
         </div>
 

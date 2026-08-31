@@ -158,6 +158,51 @@ router.get('/:userId', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
+// Block/unblock user
+router.post('/:userId/block', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (req.userId === req.params.userId) {
+      return res.status(400).json({ message: 'Cannot block yourself' })
+    }
+
+    const user = await User.findById(req.userId)
+    if (!user) return res.status(404).json({ message: 'User not found' })
+
+    const isBlocked = user.blockedUsers.includes(req.params.userId as any)
+
+    if (isBlocked) {
+      user.blockedUsers = user.blockedUsers.filter(
+        (id) => id.toString() !== req.params.userId
+      )
+    } else {
+      user.blockedUsers.push(req.params.userId as any)
+      // Also unfollow if following
+      user.following = user.following.filter(
+        (id) => id.toString() !== req.params.userId
+      )
+      await User.findByIdAndUpdate(req.params.userId, {
+        $pull: { followers: req.userId, following: req.userId },
+      })
+    }
+    await user.save()
+
+    res.json({ blocked: !isBlocked })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to block user' })
+  }
+})
+
+// Get blocked users
+router.get('/me/blocked', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.userId).populate('blockedUsers', 'username displayName avatar')
+    if (!user) return res.status(404).json({ message: 'User not found' })
+    res.json({ blockedUsers: user.blockedUsers })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to get blocked users' })
+  }
+})
+
 // Delete account
 router.delete('/me', auth, async (req: AuthRequest, res: Response) => {
   try {
