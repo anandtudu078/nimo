@@ -4,7 +4,7 @@ import path from 'path'
 import User from '../models/User'
 import Post from '../models/Post'
 import Notification from '../models/Notification'
-import Message from '../models/Message'
+import { Message } from '../models/Message'
 import { auth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
