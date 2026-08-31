@@ -203,6 +203,36 @@ router.get('/me/blocked', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
+// Change password
+router.put('/me/password', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { currentPassword, newPassword } = req.body
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current and new password are required' })
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' })
+    }
+
+    const user = await User.findById(req.userId)
+    if (!user) return res.status(404).json({ message: 'User not found' })
+
+    const isMatch = await user.comparePassword(currentPassword)
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Current password is incorrect' })
+    }
+
+    user.password = newPassword
+    await user.save() // triggers the pre-save hash hook
+
+    res.json({ message: 'Password updated successfully' })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to change password' })
+  }
+})
+
 // Delete account
 router.delete('/me', auth, async (req: AuthRequest, res: Response) => {
   try {
