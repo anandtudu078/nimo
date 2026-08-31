@@ -16,6 +16,9 @@ dotenv.config()
 
 const app = express()
 
+// Trust first proxy (Railway, Heroku, etc.) — fixes rate limiter X-Forwarded-For error
+app.set('trust proxy', 1)
+
 // Middleware
 const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || 'http://localhost:5173')
   .split(',')
