@@ -28,6 +28,7 @@ router.post('/avatar', auth, upload.single('avatar'), async (req: AuthRequest, r
 
     res.json({ user, avatarUrl })
   } catch (error: any) {
+    console.error('[Avatar Upload] Error:', error.message || error)
     res.status(500).json({ message: error.message || 'Failed to upload avatar' })
   }
 })

@@ -9,6 +9,18 @@ function getCloudinary(): any {
   if (_loadError) throw new Error(_loadError)
   if (_cloudinary) return _cloudinary
 
+  // Check required env vars before attempting upload
+  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    const missing = [
+      !process.env.CLOUDINARY_CLOUD_NAME && 'CLOUDINARY_CLOUD_NAME',
+      !process.env.CLOUDINARY_API_KEY && 'CLOUDINARY_API_KEY',
+      !process.env.CLOUDINARY_API_SECRET && 'CLOUDINARY_API_SECRET',
+    ].filter(Boolean)
+    _loadError = `Missing Cloudinary env vars: ${missing.join(', ')}`
+    console.error('[Cloudinary]', _loadError)
+    throw new Error('Image upload is not configured. Missing: ' + missing.join(', '))
+  }
+
   try {
     // Use require() instead of import() to avoid ESM/CJS issues
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -62,8 +74,12 @@ export function uploadToCloudinary(
         ],
       },
       (error: any, result: any) => {
-        if (error) reject(error)
-        else resolve(result!.secure_url)
+        if (error) {
+          console.error('[Cloudinary] Upload failed:', error.message || error)
+          reject(error)
+        } else {
+          resolve(result!.secure_url)
+        }
       }
     )
     stream.end(buffer)
