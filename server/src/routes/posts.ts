@@ -4,6 +4,7 @@ import User from '../models/User'
 import Notification from '../models/Notification'
 import { auth, AuthRequest } from '../middleware/auth'
 import Hashtag from '../models/Hashtag'
+import { spamFilter, checkContent } from '../middleware/spamFilter'
 
 const router = Router()
 
@@ -62,8 +63,8 @@ router.get('/hashtag/:tag', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Create post
-router.post('/', auth, async (req: AuthRequest, res: Response) => {
+// Create post (with spam filter)
+router.post('/', auth, spamFilter, async (req: AuthRequest, res: Response) => {
   try {
     const { content, images } = req.body
     const post = new Post({ author: req.userId, content, images })
@@ -165,8 +166,8 @@ router.post('/:id/like', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Add comment
-router.post('/:id/comment', auth, async (req: AuthRequest, res: Response) => {
+// Add comment (with spam filter)
+router.post('/:id/comment', auth, spamFilter, async (req: AuthRequest, res: Response) => {
   try {
     const { content } = req.body
     const post = await Post.findById(req.params.id)
