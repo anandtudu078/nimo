@@ -21,6 +21,7 @@ export interface IPost extends Document {
   comments: IComment[]
   reactionCounts: Map<string, number>
   shareCount: number
+  viewCount: number
   createdAt: Date
   updatedAt: Date
 }
@@ -51,6 +52,7 @@ const postSchema = new Schema<IPost>(
       default: {},
     },
     shareCount: { type: Number, default: 0 },
+    viewCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 )
