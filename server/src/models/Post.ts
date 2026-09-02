@@ -6,10 +6,17 @@ export interface IComment extends Document {
   createdAt: Date
 }
 
+export interface IImageMeta {
+  url: string
+  alt?: string
+  order: number
+}
+
 export interface IPost extends Document {
   author: mongoose.Types.ObjectId
   content: string
   images: string[]
+  imageMeta: IImageMeta[]
   likes: mongoose.Types.ObjectId[]
   comments: IComment[]
   createdAt: Date
@@ -29,6 +36,11 @@ const postSchema = new Schema<IPost>(
     author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     content: { type: String, default: '', maxlength: 280 },
     images: [{ type: String }],
+    imageMeta: [{
+      url: { type: String, required: true },
+      alt: { type: String, default: '' },
+      order: { type: Number, default: 0 },
+    }],
     likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     comments: [commentSchema],
   },
