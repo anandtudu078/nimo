@@ -9,6 +9,10 @@ export interface IUser extends Document {
   avatar?: string
   bio?: string
   website?: string
+  profileBanner?: string
+  pinnedPost?: mongoose.Types.ObjectId
+  isVerified: boolean
+  emailVerified: boolean
   followers: mongoose.Types.ObjectId[]
   following: mongoose.Types.ObjectId[]
   bookmarks: mongoose.Types.ObjectId[]
@@ -27,6 +31,10 @@ const userSchema = new Schema<IUser>(
     avatar: { type: String, default: '' },
     bio: { type: String, default: '', maxlength: 160 },
     website: { type: String, default: '' },
+    profileBanner: { type: String, default: '' },
+    pinnedPost: { type: Schema.Types.ObjectId, ref: 'Post', default: null },
+    isVerified: { type: Boolean, default: false },
+    emailVerified: { type: Boolean, default: false },
     followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     following: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     bookmarks: [{ type: Schema.Types.ObjectId, ref: 'Post' }],
