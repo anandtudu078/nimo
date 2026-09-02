@@ -20,6 +20,7 @@ export interface IPost extends Document {
   likes: mongoose.Types.ObjectId[]
   comments: IComment[]
   reactionCounts: Map<string, number>
+  shareCount: number
   createdAt: Date
   updatedAt: Date
 }
@@ -49,6 +50,7 @@ const postSchema = new Schema<IPost>(
       of: Number,
       default: {},
     },
+    shareCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 )
