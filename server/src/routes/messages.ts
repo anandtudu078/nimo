@@ -105,6 +105,7 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
       conversation: conversationId,
       sender: req.userId,
       content,
+      delivered: false,
     })
     await message.save()
     await message.populate('sender', 'username displayName')
@@ -135,16 +136,83 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Mark messages as read
+// Mark messages as delivered
+router.put('/:conversationId/delivered', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await Message.updateMany(
+      { conversation: req.params.conversationId, sender: { $ne: req.userId }, delivered: false },
+      { delivered: true }
+    )
+
+    // Notify senders that their messages were delivered
+    const io = req.app.get('io')
+    const undeliveredMessages = await Message.find({
+      conversation: req.params.conversationId,
+      sender: { $ne: req.userId },
+      delivered: true,
+    }).select('sender')
+
+    const senderIds = [...new Set(undeliveredMessages.map(m => m.sender.toString()))]
+    senderIds.forEach(senderId => {
+      emitToUser(io, senderId, 'messages_delivered', {
+        conversationId: req.params.conversationId,
+        by: req.userId,
+      })
+    })
+
+    res.json({ message: 'Messages marked as delivered', count: result.modifiedCount })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to mark messages as delivered' })
+  }
+})
+
+// Mark messages as read (with read receipts)
 router.put('/:conversationId/read', auth, async (req: AuthRequest, res: Response) => {
   try {
     await Message.updateMany(
       { conversation: req.params.conversationId, sender: { $ne: req.userId }, read: false },
       { read: true }
     )
+
+    // Notify senders that their messages were read
+    const io = req.app.get('io')
+    const unreadMessages = await Message.find({
+      conversation: req.params.conversationId,
+      sender: { $ne: req.userId },
+    }).select('sender')
+
+    const senderIds = [...new Set(unreadMessages.map(m => m.sender.toString()))]
+    senderIds.forEach(senderId => {
+      emitToUser(io, senderId, 'messages_read', {
+        conversationId: req.params.conversationId,
+        by: req.userId,
+      })
+    })
+
     res.json({ message: 'Messages marked as read' })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to mark messages as read' })
+  }
+})
+
+// Get read/delivered status for messages in a conversation
+router.get('/:conversationId/status', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const messages = await Message.find({
+      conversation: req.params.conversationId,
+      sender: req.userId,
+    }).select('read delivered createdAt')
+
+    const status = messages.map(m => ({
+      messageId: m._id,
+      delivered: m.delivered,
+      read: m.read,
+      createdAt: m.createdAt,
+    }))
+
+    res.json({ status })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to get message status' })
   }
 })
 
