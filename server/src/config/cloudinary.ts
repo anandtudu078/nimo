@@ -1,62 +1,47 @@
 import multer from 'multer'
 import { Request } from 'express'
 
-// Lazy-load cloudinary — use require() with try/catch for max safety
+// Keep a clean cache for the configured instance
 let _cloudinary: any = null
-let _loadError: string | null = null
-let _lastEnvCheck: string = ''
 
 function getCloudinary(): any {
-  // Build a fingerprint of env var presence so we can detect if vars change
-  // (e.g. after a Railway env-var update without full process restart)
-  const envFingerprint = [
-    !!process.env.CLOUDINARY_CLOUD_NAME,
-    !!process.env.CLOUDINARY_API_KEY,
-    !!process.env.CLOUDINARY_API_SECRET,
-  ].join(',')
-
-  // If env vars changed since last check, reset cached state so we re-evaluate
-  if (_loadError && envFingerprint !== _lastEnvCheck) {
-    console.log('[Cloudinary] Env vars changed, resetting cached state')
-    _loadError = null
-    _cloudinary = null
-  }
-
-  if (_loadError) throw new Error(_loadError)
+  // 1. If we already successfully connected, return it immediately
   if (_cloudinary) return _cloudinary
 
-  // Check required env vars before attempting upload
-  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  // 2. Read the absolute freshest values directly from process.env at runtime
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME
+  const apiKey = process.env.CLOUDINARY_API_KEY
+  const apiSecret = process.env.CLOUDINARY_API_SECRET
+
+  // 3. Check variables cleanly on every invocation if not cached yet
+  if (!cloudName || !apiKey || !apiSecret) {
     const missing = [
-      !process.env.CLOUDINARY_CLOUD_NAME && 'CLOUDINARY_CLOUD_NAME',
-      !process.env.CLOUDINARY_API_KEY && 'CLOUDINARY_API_KEY',
-      !process.env.CLOUDINARY_API_SECRET && 'CLOUDINARY_API_SECRET',
+      !cloudName && 'CLOUDINARY_CLOUD_NAME',
+      !apiKey && 'CLOUDINARY_API_KEY',
+      !apiSecret && 'CLOUDINARY_API_SECRET',
     ].filter(Boolean)
-    _lastEnvCheck = envFingerprint
-    _loadError = `Missing Cloudinary env vars: ${missing.join(', ')}`
-    console.error('[Cloudinary]', _loadError)
-    throw new Error('Missing Cloudinary env vars: ' + missing.join(', '))
+    
+    console.error('[Cloudinary] Missing configuration items:', missing.join(', '))
+    throw new Error(`Missing Cloudinary env vars: ${missing.join(', ')}`)
   }
 
   try {
-    // Use require() instead of import() to avoid ESM/CJS issues
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require('cloudinary')
     const c = mod.v2 || mod
+    
     c.config({
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      api_secret: process.env.CLOUDINARY_API_SECRET,
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret,
     })
-    _cloudinary = c
-    _lastEnvCheck = envFingerprint
-    console.log('[Cloudinary] ✅ Successfully configured')
+
+    _cloudinary = c // Cache success
+    console.log('[Cloudinary] ✅ Successfully configured at runtime')
     return _cloudinary
   } catch (err: any) {
-    _lastEnvCheck = envFingerprint
-    _loadError = `Cloudinary unavailable: ${err.message}`
-    console.error('[Cloudinary]', _loadError)
-    throw new Error('Image upload is temporarily unavailable')
+    console.error('[Cloudinary] Configuration initialization failed:', err.message)
+    throw new Error('Image upload utility is temporarily unavailable')
   }
 }
 
@@ -66,7 +51,7 @@ const storage = multer.memoryStorage()
 export const upload = multer({
   storage,
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: 5 * 1024 * 1024, // 5MB limit
     files: 4,
   },
   fileFilter: (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
@@ -83,6 +68,7 @@ export function uploadToCloudinary(
   buffer: Buffer,
   filename: string
 ): Promise<string> {
+  // Pulls configuration dynamically
   const cloudinary = getCloudinary()
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -95,7 +81,7 @@ export function uploadToCloudinary(
       },
       (error: any, result: any) => {
         if (error) {
-          console.error('[Cloudinary] Upload failed:', error.message || error)
+          console.error('[Cloudinary] Upload stream failed:', error.message || error)
           reject(error)
         } else {
           resolve(result!.secure_url)
@@ -107,9 +93,21 @@ export function uploadToCloudinary(
 }
 
 export function deleteFromCloudinary(url: string): Promise<void> {
-  const cloudinary = getCloudinary()
-  const parts = url.split('/')
-  const folderAndFile = parts.slice(parts.indexOf('nimo')).join('/')
-  const publicId = folderAndFile.replace(/\.[^.]+$/, '')
-  return cloudinary.uploader.destroy(publicId)
+  try {
+    const cloudinary = getCloudinary()
+    const parts = url.split('/')
+    const nimoIndex = parts.indexOf('nimo')
+    
+    if (nimoIndex === -1) {
+      throw new Error("Target delivery directory 'nimo' not detected in URL structure")
+    }
+    
+    const folderAndFile = parts.slice(nimoIndex).join('/')
+    const publicId = folderAndFile.replace(/\.[^.]+$/, '') // Drops file extensions safely
+    
+    return cloudinary.uploader.destroy(publicId)
+  } catch (err: any) {
+    console.error('[Cloudinary] Asset deletion failed:', err.message)
+    return Promise.reject(err)
+  }
 }
