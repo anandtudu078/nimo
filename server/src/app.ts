@@ -11,6 +11,7 @@ import uploadRoutes from './routes/upload'
 import reportRoutes from './routes/reports'
 import pushNotificationRoutes from './routes/pushNotifications'
 import muteRoutes from './routes/mutes'
+import draftRoutes from './routes/drafts'
 import { apiLimiter, authLimiter, postLimiter } from './middleware/rateLimit'
 
 dotenv.config()
@@ -74,6 +75,7 @@ app.use('/api/upload', apiLimiter, uploadRoutes)
 app.use('/api/reports', apiLimiter, reportRoutes)
 app.use('/api/push-notifications', apiLimiter, pushNotificationRoutes)
 app.use('/api/mutes', apiLimiter, muteRoutes)
+app.use('/api/drafts', apiLimiter, draftRoutes)
 
 // Health check
 app.get('/api/health', (_req, res) => {
