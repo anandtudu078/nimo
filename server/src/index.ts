@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import { createServer } from 'http'
 import app from './app'
 import { setupSocketIO } from './config/socket'
+import { initCache } from './config/redis'
 
 const PORT = process.env.PORT || 5000
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/nimo'
@@ -22,6 +23,9 @@ async function startServer(retries = 3) {
       console.log(`🔌 Connecting to: ${MONGODB_URI.replace(/:\/\/[^:]+:[^@]+@/, ':***@')}`)
       await mongoose.connect(MONGODB_URI, options)
       console.log('✅ Connected to MongoDB')
+
+      // Initialize cache
+      await initCache()
 
       // Create HTTP server and attach Socket.io
       const httpServer = createServer(app)
