@@ -1,42 +1,21 @@
 import { Router, Response } from 'express'
-import multer from 'multer'
-import path from 'path'
 import User from '../models/User'
 import Post from '../models/Post'
 import Notification from '../models/Notification'
 import { Message } from '../models/Message'
 import { auth, AuthRequest } from '../middleware/auth'
+import { upload, uploadToCloudinary } from '../config/cloudinary'
 
 const router = Router()
 
-// Multer config for avatar uploads
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, path.join(__dirname, '../../uploads')),
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`
-    cb(null, `avatar-${uniqueSuffix}${path.extname(file.originalname)}`)
-  },
-})
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: (_req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|webp/
-    const ext = allowed.test(path.extname(file.originalname).toLowerCase())
-    const mime = allowed.test(file.mimetype)
-    cb(null, ext && mime)
-  },
-})
-
-// Upload avatar
+// Upload avatar (via Cloudinary)
 router.post('/avatar', auth, upload.single('avatar'), async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No image file provided' })
     }
 
-    const avatarUrl = `/uploads/${req.file.filename}`
+    const avatarUrl = await uploadToCloudinary(req.file.buffer, req.file.originalname)
     const user = await User.findByIdAndUpdate(
       req.userId,
       { avatar: avatarUrl },

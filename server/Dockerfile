@@ -30,9 +30,6 @@ RUN npm ci --omit=dev
 # Copy built files from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Create uploads directory
-RUN mkdir -p uploads
-
 # Expose port
 EXPOSE 5000
 

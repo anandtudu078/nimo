@@ -1,6 +1,5 @@
 import express from 'express'
 import cookieParser from 'cookie-parser'
-import path from 'path'
 import dotenv from 'dotenv'
 import authRoutes from './routes/auth'
 import postRoutes from './routes/posts'
@@ -61,9 +60,6 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '10mb' }))
 app.use(cookieParser())
-
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 
 // Routes
 app.use('/api/auth', authLimiter, authRoutes)

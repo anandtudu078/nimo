@@ -31,9 +31,6 @@ RUN npm ci --omit=dev
 # Copy built files from builder stage
 COPY --from=builder /app/server/dist ./dist
 
-# Create uploads directory
-RUN mkdir -p uploads
-
 # Note: Railway sets PORT dynamically via env var, do NOT hardcode it
 EXPOSE 5000
 
