@@ -76,20 +76,6 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-// Debug: check which env vars are set (no values exposed)
-app.get('/api/env-check', (_req, res) => {
-  const vars = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET']
-  const result: Record<string, any> = {}
-  for (const v of vars) {
-    const val = process.env[v]
-    result[v] = {
-      set: !!val,
-      length: val ? val.length : 0,
-      firstChar: val ? val[0] : null,
-    }
-  }
-  res.json(result)
-})
 
 // Global error handler — catches unhandled async errors and multer middleware errors
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
