@@ -118,13 +118,14 @@ router.put('/me/pin-post', auth, async (req: AuthRequest, res: Response) => {
 // Update profile
 router.put('/me', auth, async (req: AuthRequest, res: Response) => {
   try {
-    const { displayName, bio, website, avatar, profileBanner } = req.body
+    const { displayName, bio, website, avatar, profileBanner, studyYear } = req.body
     const updateData: Record<string, any> = {}
     if (displayName !== undefined) updateData.displayName = displayName
     if (bio !== undefined) updateData.bio = bio
     if (website !== undefined) updateData.website = website
     if (avatar !== undefined) updateData.avatar = avatar
     if (profileBanner !== undefined) updateData.profileBanner = profileBanner
+    if (studyYear !== undefined) updateData.studyYear = studyYear
     const user = await User.findByIdAndUpdate(
       req.userId,
       updateData,

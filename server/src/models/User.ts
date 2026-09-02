@@ -14,6 +14,7 @@ export interface IUser extends Document {
   isVerified: boolean
   emailVerified: boolean
   fcmTokens: string[]
+  studyYear?: string
   followers: mongoose.Types.ObjectId[]
   following: mongoose.Types.ObjectId[]
   bookmarks: mongoose.Types.ObjectId[]
@@ -39,6 +40,7 @@ const userSchema = new Schema<IUser>(
     isVerified: { type: Boolean, default: false },
     emailVerified: { type: Boolean, default: false },
     fcmTokens: [{ type: String }],
+    studyYear: { type: String, default: '' },
     followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     following: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     bookmarks: [{ type: Schema.Types.ObjectId, ref: 'Post' }],

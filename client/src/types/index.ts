@@ -6,6 +6,7 @@ export interface User {
   avatar?: string
   bio?: string
   website?: string
+  studyYear?: string
   followers: string[]
   following: string[]
   createdAt: string

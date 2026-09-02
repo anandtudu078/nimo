@@ -20,7 +20,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'posts' | 'likes'>('posts')
   const [isFollowing, setIsFollowing] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [editForm, setEditForm] = useState({ displayName: '', bio: '', avatar: '' })
+  const [editForm, setEditForm] = useState({ displayName: '', bio: '', avatar: '', studyYear: '' })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -122,6 +122,7 @@ export default function ProfilePage() {
       displayName: profileUser.displayName,
       bio: profileUser.bio || '',
       avatar: profileUser.avatar || '',
+      studyYear: (profileUser as any).studyYear || '',
     })
     setEditing(true)
   }
@@ -133,6 +134,7 @@ export default function ProfilePage() {
         displayName: editForm.displayName,
         bio: editForm.bio,
         avatar: editForm.avatar,
+        studyYear: editForm.studyYear,
       })
       setProfileUser(res.data.user)
       updateUser(res.data.user)
@@ -226,6 +228,18 @@ export default function ProfilePage() {
                 className="input-field"
                 maxLength={50}
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Batch / Study Year</label>
+              <input
+                type="text"
+                value={editForm.studyYear}
+                onChange={(e) => setEditForm({ ...editForm, studyYear: e.target.value })}
+                className="input-field"
+                placeholder="e.g. 2024, 2023-2027"
+                maxLength={20}
+              />
+              <p className="text-xs text-gray-500 mt-1">Your academic batch or study year</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-1">Bio</label>
@@ -400,6 +414,9 @@ export default function ProfilePage() {
             <p className="text-gray-500">@{profileUser.username}</p>
             {profileUser.bio && (
               <p className="mt-2 text-gray-300">{profileUser.bio}</p>
+            )}
+            {(profileUser as any).studyYear && (
+              <p className="text-sm text-blue-400 mt-1">📚 Batch: {(profileUser as any).studyYear}</p>
             )}
             <p className="text-sm text-gray-500 mt-2">
               Joined {formatDistanceToNow(new Date(profileUser.createdAt), { addSuffix: true })}
