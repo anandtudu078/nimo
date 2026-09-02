@@ -9,6 +9,7 @@ export interface IUser extends Document {
   avatar?: string
   bio?: string
   website?: string
+  studyYear?: string
   followers: mongoose.Types.ObjectId[]
   following: mongoose.Types.ObjectId[]
   bookmarks: mongoose.Types.ObjectId[]
@@ -27,6 +28,7 @@ const userSchema = new Schema<IUser>(
     avatar: { type: String, default: '' },
     bio: { type: String, default: '', maxlength: 160 },
     website: { type: String, default: '' },
+    studyYear: { type: String, default: '' },
     followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     following: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     bookmarks: [{ type: Schema.Types.ObjectId, ref: 'Post' }],
