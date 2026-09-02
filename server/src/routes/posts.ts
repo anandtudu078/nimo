@@ -55,7 +55,7 @@ router.get('/hashtag/:tag', auth, async (req: AuthRequest, res: Response) => {
       .sort({ createdAt: -1 })
       .limit(50)
       .populate('author', 'username displayName avatar')
-      .populate('comments.author', 'username displayName')
+      .populate('comments.author', 'username displayName avatar')
     res.json({ posts, tag })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to search hashtags' })
@@ -96,7 +96,7 @@ router.get('/feed', auth, async (req: AuthRequest, res: Response) => {
       .skip(skip)
       .limit(limit)
       .populate('author', 'username displayName avatar')
-      .populate('comments.author', 'username displayName')
+      .populate('comments.author', 'username displayName avatar')
 
     const total = await Post.countDocuments({ author: { $nin: blockedIds } })
 
@@ -112,7 +112,7 @@ router.get('/user/:userId/liked', auth, async (req: AuthRequest, res: Response) 
     const posts = await Post.find({ likes: req.params.userId })
       .sort({ createdAt: -1 })
       .populate('author', 'username displayName avatar')
-      .populate('comments.author', 'username displayName')
+      .populate('comments.author', 'username displayName avatar')
 
     res.json({ posts })
   } catch (error: any) {
@@ -126,7 +126,7 @@ router.get('/user/:userId', auth, async (req: AuthRequest, res: Response) => {
     const posts = await Post.find({ author: req.params.userId })
       .sort({ createdAt: -1 })
       .populate('author', 'username displayName avatar')
-      .populate('comments.author', 'username displayName')
+      .populate('comments.author', 'username displayName avatar')
 
     res.json({ posts })
   } catch (error: any) {
@@ -178,7 +178,7 @@ router.post('/:id/comment', auth, async (req: AuthRequest, res: Response) => {
     post.comments.push(comment as any)
     await post.save()
 
-    await post.populate({ path: 'comments.author', select: 'username displayName' })
+    await post.populate({ path: 'comments.author', select: 'username displayName avatar' })
     const newComment = post.comments[post.comments.length - 1]
 
     // Create notification
@@ -223,7 +223,7 @@ router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
     if (removedTags.length > 0) await updateHashtags(removedTags, -1)
     if (addedTags.length > 0) await updateHashtags(addedTags, 1)
     await post.populate('author', 'username displayName avatar')
-    await post.populate('comments.author', 'username displayName')
+    await post.populate('comments.author', 'username displayName avatar')
 
     res.json(post)
   } catch (error: any) {

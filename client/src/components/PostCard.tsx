@@ -227,7 +227,7 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
         <div className="mt-3 pt-3 border-t border-gray-800">
           {comments.map((comment) => (
             <div key={comment._id} className="flex gap-2 mb-3">
-              <Avatar name={comment.author.displayName} size="sm" />
+              <Avatar src={comment.author.avatar} name={comment.author.displayName} size="sm" />
               <div className="flex-1">
                 <div className="bg-gray-900 rounded-2xl px-3 py-2">
                   <span className="font-semibold text-sm text-white">{comment.author.displayName}</span>

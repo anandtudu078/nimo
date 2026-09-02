@@ -130,6 +130,17 @@ router.get('/:userId/following', auth, async (req: AuthRequest, res: Response) =
   }
 })
 
+// Get blocked users (must be before /:userId to avoid route conflict)
+router.get('/me/blocked', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.userId).populate('blockedUsers', 'username displayName avatar')
+    if (!user) return res.status(404).json({ message: 'User not found' })
+    res.json({ blockedUsers: user.blockedUsers })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to get blocked users' })
+  }
+})
+
 // Get user profile
 router.get('/:userId', auth, async (req: AuthRequest, res: Response) => {
   try {
@@ -174,17 +185,6 @@ router.post('/:userId/block', auth, async (req: AuthRequest, res: Response) => {
     res.json({ blocked: !isBlocked })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to block user' })
-  }
-})
-
-// Get blocked users
-router.get('/me/blocked', auth, async (req: AuthRequest, res: Response) => {
-  try {
-    const user = await User.findById(req.userId).populate('blockedUsers', 'username displayName avatar')
-    if (!user) return res.status(404).json({ message: 'User not found' })
-    res.json({ blockedUsers: user.blockedUsers })
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || 'Failed to get blocked users' })
   }
 })
 
