@@ -4,8 +4,24 @@ import { Request } from 'express'
 // Lazy-load cloudinary — use require() with try/catch for max safety
 let _cloudinary: any = null
 let _loadError: string | null = null
+let _lastEnvCheck: string = ''
 
 function getCloudinary(): any {
+  // Build a fingerprint of env var presence so we can detect if vars change
+  // (e.g. after a Railway env-var update without full process restart)
+  const envFingerprint = [
+    !!process.env.CLOUDINARY_CLOUD_NAME,
+    !!process.env.CLOUDINARY_API_KEY,
+    !!process.env.CLOUDINARY_API_SECRET,
+  ].join(',')
+
+  // If env vars changed since last check, reset cached state so we re-evaluate
+  if (_loadError && envFingerprint !== _lastEnvCheck) {
+    console.log('[Cloudinary] Env vars changed, resetting cached state')
+    _loadError = null
+    _cloudinary = null
+  }
+
   if (_loadError) throw new Error(_loadError)
   if (_cloudinary) return _cloudinary
 
@@ -16,9 +32,10 @@ function getCloudinary(): any {
       !process.env.CLOUDINARY_API_KEY && 'CLOUDINARY_API_KEY',
       !process.env.CLOUDINARY_API_SECRET && 'CLOUDINARY_API_SECRET',
     ].filter(Boolean)
+    _lastEnvCheck = envFingerprint
     _loadError = `Missing Cloudinary env vars: ${missing.join(', ')}`
     console.error('[Cloudinary]', _loadError)
-    throw new Error('Image upload is not configured. Missing: ' + missing.join(', '))
+    throw new Error('Missing Cloudinary env vars: ' + missing.join(', '))
   }
 
   try {
@@ -32,8 +49,11 @@ function getCloudinary(): any {
       api_secret: process.env.CLOUDINARY_API_SECRET,
     })
     _cloudinary = c
+    _lastEnvCheck = envFingerprint
+    console.log('[Cloudinary] ✅ Successfully configured')
     return _cloudinary
   } catch (err: any) {
+    _lastEnvCheck = envFingerprint
     _loadError = `Cloudinary unavailable: ${err.message}`
     console.error('[Cloudinary]', _loadError)
     throw new Error('Image upload is temporarily unavailable')

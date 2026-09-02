@@ -6,6 +6,11 @@ import { setupSocketIO } from './config/socket'
 const PORT = process.env.PORT || 5000
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/nimo'
 
+// Log Cloudinary env var status at startup
+const cloudinaryVars = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET']
+const cloudinaryStatus = cloudinaryVars.map(v => `${v}=${process.env[v] ? 'SET' : 'MISSING'}`).join(', ')
+console.log(`[Env] Cloudinary: ${cloudinaryStatus}`)
+
 async function startServer(retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
