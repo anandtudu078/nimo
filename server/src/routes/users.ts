@@ -19,6 +19,15 @@ const handleAvatarUpload = async (req: AuthRequest, res: Response) => {
   })
 }
 
+const handleBannerUpload = async (req: AuthRequest, res: Response) => {
+  await new Promise<void>((resolve, reject) => {
+    upload.single('banner')(req as any, res as any, (err: any) => {
+      if (err) reject(err)
+      else resolve()
+    })
+  })
+}
+
 router.post('/avatar', auth, async (req: AuthRequest, res: Response) => {
   try {
     await handleAvatarUpload(req, res)
@@ -50,15 +59,72 @@ router.post('/avatar', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
+// Upload profile banner
+router.post('/banner', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    await handleBannerUpload(req, res)
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No image file provided' })
+    }
+
+    const bannerUrl = await uploadToCloudinary(req.file.buffer, req.file.originalname)
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      { profileBanner: bannerUrl },
+      { new: true }
+    ).select('-password')
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+
+    res.json({ user, bannerUrl })
+  } catch (error: any) {
+    console.error('[Banner Upload] Error:', error.message || error)
+    const statusCode = error.code && error.code.startsWith('LIMIT_') ? 400 : 500
+    res.status(statusCode).json({ message: error.message || 'Failed to upload banner' })
+  }
+})
+
+// Pin/unpin a post on profile
+router.put('/me/pin-post', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { postId } = req.body
+
+    const user = await User.findById(req.userId)
+    if (!user) return res.status(404).json({ message: 'User not found' })
+
+    // Toggle pin: if same post, unpin it
+    if (user.pinnedPost?.toString() === postId) {
+      user.pinnedPost = undefined
+    } else {
+      // Verify post exists and belongs to user
+      const post = await Post.findById(postId)
+      if (!post) return res.status(404).json({ message: 'Post not found' })
+      if (post.author.toString() !== req.userId) {
+        return res.status(403).json({ message: 'Can only pin your own posts' })
+      }
+      user.pinnedPost = postId
+    }
+    await user.save()
+
+    res.json({ pinnedPost: user.pinnedPost || null })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to pin post' })
+  }
+})
+
 // Update profile
 router.put('/me', auth, async (req: AuthRequest, res: Response) => {
   try {
-    const { displayName, bio, website, avatar } = req.body
+    const { displayName, bio, website, avatar, profileBanner } = req.body
     const updateData: Record<string, any> = {}
     if (displayName !== undefined) updateData.displayName = displayName
     if (bio !== undefined) updateData.bio = bio
     if (website !== undefined) updateData.website = website
     if (avatar !== undefined) updateData.avatar = avatar
+    if (profileBanner !== undefined) updateData.profileBanner = profileBanner
     const user = await User.findByIdAndUpdate(
       req.userId,
       updateData,
@@ -158,10 +224,15 @@ router.get('/me/blocked', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Get user profile
+// Get user profile (with pinned post populated)
 router.get('/:userId', auth, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await User.findById(req.params.userId).select('-password')
+    const user = await User.findById(req.params.userId)
+      .select('-password')
+      .populate({
+        path: 'pinnedPost',
+        populate: { path: 'author', select: 'username displayName avatar' },
+      })
     if (!user) {
       return res.status(404).json({ message: 'User not found' })
     }
