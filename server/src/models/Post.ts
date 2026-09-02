@@ -19,6 +19,7 @@ export interface IPost extends Document {
   imageMeta: IImageMeta[]
   likes: mongoose.Types.ObjectId[]
   comments: IComment[]
+  reactionCounts: Map<string, number>
   createdAt: Date
   updatedAt: Date
 }
@@ -43,6 +44,11 @@ const postSchema = new Schema<IPost>(
     }],
     likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     comments: [commentSchema],
+    reactionCounts: {
+      type: Map,
+      of: Number,
+      default: {},
+    },
   },
   { timestamps: true }
 )
