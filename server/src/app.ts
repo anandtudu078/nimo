@@ -14,6 +14,7 @@ import muteRoutes from './routes/mutes'
 import draftRoutes from './routes/drafts'
 import emailVerificationRoutes from './routes/emailVerification'
 import exploreRoutes from './routes/explore'
+import pollRoutes from './routes/polls'
 import { apiLimiter, authLimiter, postLimiter } from './middleware/rateLimit'
 
 dotenv.config()
@@ -80,6 +81,7 @@ app.use('/api/mutes', apiLimiter, muteRoutes)
 app.use('/api/drafts', apiLimiter, draftRoutes)
 app.use('/api/email-verification', apiLimiter, emailVerificationRoutes)
 app.use('/api/explore', apiLimiter, exploreRoutes)
+app.use('/api/polls', apiLimiter, pollRoutes)
 
 // Health check
 app.get('/api/health', (_req, res) => {
