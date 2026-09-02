@@ -14,7 +14,7 @@ const handleImageUpload = async (req: AuthRequest, res: Response) => {
   })
 }
 
-// Upload images (up to 4)
+// Upload images (up to 4, carousel support)
 router.post('/', auth, async (req: AuthRequest, res: Response) => {
   try {
     await handleImageUpload(req, res)
@@ -24,11 +24,23 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No images uploaded' })
     }
 
+    if (files.length > 4) {
+      return res.status(400).json({ message: 'Maximum 4 images allowed per post' })
+    }
+
     const urls = await Promise.all(
       files.map((file) => uploadToCloudinary(file.buffer, file.originalname))
     )
 
-    res.json({ urls })
+    // Build image metadata with order and optional alt text
+    const alts = req.body.alts ? JSON.parse(req.body.alts) : []
+    const imageMeta = urls.map((url, i) => ({
+      url,
+      alt: alts[i] || '',
+      order: i,
+    }))
+
+    res.json({ urls, imageMeta })
   } catch (error: any) {
     console.error('[Upload] Error:', error.message || error)
     const statusCode = error.code && error.code.startsWith('LIMIT_') ? 400 : 500
