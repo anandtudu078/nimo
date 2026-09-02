@@ -132,6 +132,7 @@ export default function ProfilePage() {
       const res = await api.put('/users/me', {
         displayName: editForm.displayName,
         bio: editForm.bio,
+        avatar: editForm.avatar,
       })
       setProfileUser(res.data.user)
       updateUser(res.data.user)

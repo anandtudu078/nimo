@@ -36,9 +36,14 @@ router.post('/avatar', auth, upload.single('avatar'), async (req: AuthRequest, r
 router.put('/me', auth, async (req: AuthRequest, res: Response) => {
   try {
     const { displayName, bio, website, avatar } = req.body
+    const updateData: Record<string, any> = {}
+    if (displayName !== undefined) updateData.displayName = displayName
+    if (bio !== undefined) updateData.bio = bio
+    if (website !== undefined) updateData.website = website
+    if (avatar !== undefined) updateData.avatar = avatar
     const user = await User.findByIdAndUpdate(
       req.userId,
-      { displayName, bio, website, avatar },
+      updateData,
       { new: true, runValidators: true }
     ).select('-password')
 
