@@ -76,4 +76,11 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
+// Global error handler — catches unhandled async errors and multer middleware errors
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[Global Error]', err.message || err)
+  const statusCode = err.statusCode || err.status || 500
+  res.status(statusCode).json({ message: err.message || 'Internal server error' })
+})
+
 export default app

@@ -4,9 +4,21 @@ import { auth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
+// Wrap multer middleware to catch promise rejections (multer v2 is async)
+const handleImageUpload = async (req: AuthRequest, res: Response) => {
+  await new Promise<void>((resolve, reject) => {
+    upload.array('images', 4)(req as any, res as any, (err: any) => {
+      if (err) reject(err)
+      else resolve()
+    })
+  })
+}
+
 // Upload images (up to 4)
-router.post('/', auth, upload.array('images', 4), async (req: AuthRequest, res: Response) => {
+router.post('/', auth, async (req: AuthRequest, res: Response) => {
   try {
+    await handleImageUpload(req, res)
+
     const files = req.files as Express.Multer.File[]
     if (!files || files.length === 0) {
       return res.status(400).json({ message: 'No images uploaded' })
@@ -18,7 +30,9 @@ router.post('/', auth, upload.array('images', 4), async (req: AuthRequest, res: 
 
     res.json({ urls })
   } catch (error: any) {
-    res.status(500).json({ message: error.message || 'Failed to upload images' })
+    console.error('[Upload] Error:', error.message || error)
+    const statusCode = error.code && error.code.startsWith('LIMIT_') ? 400 : 500
+    res.status(statusCode).json({ message: error.message || 'Failed to upload images' })
   }
 })
 

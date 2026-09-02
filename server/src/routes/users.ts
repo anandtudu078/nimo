@@ -9,8 +9,20 @@ import { upload, uploadToCloudinary } from '../config/cloudinary'
 const router = Router()
 
 // Upload avatar (via Cloudinary)
-router.post('/avatar', auth, upload.single('avatar'), async (req: AuthRequest, res: Response) => {
+// Wrap multer middleware to catch promise rejections (multer v2 is async)
+const handleAvatarUpload = async (req: AuthRequest, res: Response) => {
+  await new Promise<void>((resolve, reject) => {
+    upload.single('avatar')(req as any, res as any, (err: any) => {
+      if (err) reject(err)
+      else resolve()
+    })
+  })
+}
+
+router.post('/avatar', auth, async (req: AuthRequest, res: Response) => {
   try {
+    await handleAvatarUpload(req, res)
+
     if (!req.file) {
       return res.status(400).json({ message: 'No image file provided' })
     }
@@ -29,7 +41,12 @@ router.post('/avatar', auth, upload.single('avatar'), async (req: AuthRequest, r
     res.json({ user, avatarUrl })
   } catch (error: any) {
     console.error('[Avatar Upload] Error:', error.message || error)
-    res.status(500).json({ message: error.message || 'Failed to upload avatar' })
+    console.error('[Avatar Upload] Stack:', error.stack)
+    if (error.message && error.message.includes('Missing Cloudinary')) {
+      return res.status(503).json({ message: 'Image upload service is not configured' })
+    }
+    const statusCode = error.code && error.code.startsWith('LIMIT_') ? 400 : 500
+    res.status(statusCode).json({ message: error.message || 'Failed to upload avatar' })
   }
 })
 
