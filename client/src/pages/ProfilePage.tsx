@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import PostCard from '../components/PostCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Avatar from '../components/Avatar'
@@ -7,11 +7,12 @@ import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { User, Post } from '../types'
 import { formatDistanceToNow } from 'date-fns'
-import { FaCamera, FaTimes, FaTrash, FaBan, FaFlag } from 'react-icons/fa'
+import { FaCamera, FaTimes, FaTrash, FaBan, FaFlag, FaEnvelope } from 'react-icons/fa'
 import ReportModal from '../components/ReportModal'
 
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>()
+  const navigate = useNavigate()
   const { user: currentUser, updateUser } = useAuth()
   const [profileUser, setProfileUser] = useState<User | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
@@ -67,6 +68,29 @@ export default function ProfilePage() {
       }
     } catch (error) {
       console.error('Failed to block user')
+    }
+  }
+
+  const handleMessage = async () => {
+    if (!profileUser || !userId) return
+    try {
+      const res = await api.post(`/messages/conversation/${userId}`)
+      const conversation = res.data.conversation
+      navigate('/messages', {
+        state: {
+          startConversation: {
+            conversationId: conversation._id,
+            participant: {
+              _id: profileUser._id,
+              username: profileUser.username,
+              displayName: profileUser.displayName,
+              avatar: profileUser.avatar,
+            },
+          },
+        },
+      })
+    } catch (error) {
+      console.error('Failed to start conversation')
     }
   }
 
@@ -191,6 +215,14 @@ export default function ProfilePage() {
           </div>
           {!isOwnProfile && (
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleMessage}
+                className="btn-secondary flex items-center gap-2"
+                title="Send a message"
+              >
+                <FaEnvelope size={14} />
+                Message
+              </button>
               <button
                 onClick={handleFollow}
                 className={isFollowing ? 'btn-secondary' : 'btn-primary'}

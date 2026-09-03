@@ -70,7 +70,7 @@ class MemoryCache {
 
 class RedisCache {
   private client: any = null
-  private connected = false
+  connected = false
 
   async connect(): Promise<void> {
     if (!REDIS_URL) return

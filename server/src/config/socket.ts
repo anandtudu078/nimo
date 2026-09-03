@@ -61,16 +61,9 @@ export function setupSocketIO(httpServer: HttpServer): Server {
       socket.leave(`conversation:${conversationId}`)
     })
 
-    // Handle new message
-    socket.on('send_message', (data: { conversationId: string; content: string }) => {
-      // Broadcast to the conversation room (including sender for confirmation)
-      io.to(`conversation:${data.conversationId}`).emit('new_message', {
-        conversationId: data.conversationId,
-        sender: userId,
-        content: data.content,
-        createdAt: new Date().toISOString(),
-      })
-    })
+    // Messages are persisted via POST /api/messages and broadcast from
+    // routes/messages.ts (single source of truth for storage + real-time).
+    // The socket only relays presence/typing events below.
 
     // Handle typing indicator
     socket.on('typing_start', (data: { conversationId: string }) => {

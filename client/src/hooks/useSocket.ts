@@ -40,10 +40,6 @@ export function useSocket() {
     socketRef.current?.emit('leave_conversation', conversationId)
   }, [])
 
-  const sendMessage = useCallback((conversationId: string, content: string) => {
-    socketRef.current?.emit('send_message', { conversationId, content })
-  }, [])
-
   const startTyping = useCallback((conversationId: string) => {
     socketRef.current?.emit('typing_start', { conversationId })
   }, [])
@@ -62,6 +58,16 @@ export function useSocket() {
     return () => { socketRef.current?.off('new_message_notification', callback) }
   }, [])
 
+  const onMessagesDelivered = useCallback((callback: (data: any) => void) => {
+    socketRef.current?.on('messages_delivered', callback)
+    return () => { socketRef.current?.off('messages_delivered', callback) }
+  }, [])
+
+  const onMessagesRead = useCallback((callback: (data: any) => void) => {
+    socketRef.current?.on('messages_read', callback)
+    return () => { socketRef.current?.off('messages_read', callback) }
+  }, [])
+
   const onUserTyping = useCallback((callback: (data: any) => void) => {
     socketRef.current?.on('user_typing', callback)
     return () => { socketRef.current?.off('user_typing', callback) }
@@ -77,11 +83,12 @@ export function useSocket() {
     connected,
     joinConversation,
     leaveConversation,
-    sendMessage,
     startTyping,
     stopTyping,
     onNewMessage,
     onNewMessageNotification,
+    onMessagesDelivered,
+    onMessagesRead,
     onUserTyping,
     onUserTypingStop,
   }
