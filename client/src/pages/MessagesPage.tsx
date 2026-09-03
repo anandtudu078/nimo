@@ -36,6 +36,16 @@ function getSenderId(sender: Message['sender']): string {
   return typeof sender === 'string' ? sender : sender?._id
 }
 
+// Legacy/malformed records can lack a valid timestamp (e.g. lastMessage
+// without createdAt). date-fns throws RangeError on invalid dates and would
+// crash the whole page, so fall back to an empty string instead.
+function formatMessageTime(value?: string): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return formatDistanceToNow(date, { addSuffix: true })
+}
+
 export default function MessagesPage() {
   const { user } = useAuth()
   const {
@@ -309,7 +319,7 @@ export default function MessagesPage() {
                   <p className="font-semibold truncate text-white">{conv.participant?.displayName || 'Unknown'}</p>
                   {conv.lastMessage && (
                     <span className="text-xs text-gray-500">
-                      {formatDistanceToNow(new Date(conv.lastMessage.createdAt), { addSuffix: true })}
+                      {formatMessageTime(conv.lastMessage?.createdAt)}
                     </span>
                   )}
                 </div>
@@ -372,7 +382,7 @@ export default function MessagesPage() {
                         }`}
                       >
                         <span>
-                          {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
+                          {formatMessageTime(msg.createdAt)}
                         </span>
                         {isOwn && (
                           <span
