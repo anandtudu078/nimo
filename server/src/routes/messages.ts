@@ -126,6 +126,11 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
             conversationId,
             message,
           })
+          // Deliver the full message so open chats update in real time
+          emitToUser(io, participantId.toString(), 'new_message', {
+            conversationId,
+            message,
+          })
         }
       })
     }

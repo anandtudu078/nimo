@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../hooks/useSocket'
@@ -7,18 +8,32 @@ import Avatar from '../components/Avatar'
 import { formatDistanceToNow } from 'date-fns'
 import { FaPaperPlane, FaArrowLeft } from 'react-icons/fa'
 
+interface MessageParticipant {
+  _id: string
+  username: string
+  displayName: string
+  avatar?: string
+}
+
 interface Conversation {
   _id: string
-  participant: { _id: string; username: string; displayName: string; avatar?: string }
-  lastMessage: { content: string; createdAt: string }
+  participant: MessageParticipant
+  lastMessage?: { content: string; createdAt: string }
   unreadCount: number
 }
 
 interface Message {
   _id: string
-  sender: string
+  sender: string | MessageParticipant
   content: string
   createdAt: string
+  read?: boolean
+  delivered?: boolean
+}
+
+// Server populates `sender` as a user object; socket payloads send the plain id
+function getSenderId(sender: Message['sender']): string {
+  return typeof sender === 'string' ? sender : sender?._id
 }
 
 export default function MessagesPage() {
@@ -27,14 +42,17 @@ export default function MessagesPage() {
     connected,
     joinConversation,
     leaveConversation,
-    sendMessage: socketSendMessage,
     startTyping,
     stopTyping,
     onNewMessage,
     onNewMessageNotification,
+    onMessagesDelivered,
+    onMessagesRead,
     onUserTyping,
     onUserTypingStop,
   } = useSocket()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
@@ -45,9 +63,18 @@ export default function MessagesPage() {
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const pendingConversationRef = useRef<{ conversationId: string; participant: MessageParticipant } | null>(null)
 
   useEffect(() => {
+    // If we were navigated here to start a conversation (Message button on a profile)
+    const state = location.state as { startConversation?: { conversationId: string; participant: MessageParticipant } } | null
+    if (state?.startConversation) {
+      pendingConversationRef.current = state.startConversation
+      // Clear the navigation state so a refresh doesn't reopen the chat
+      navigate(location.pathname, { replace: true })
+    }
     fetchConversations()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -66,38 +93,53 @@ export default function MessagesPage() {
   useEffect(() => {
     const cleanup = onNewMessage((data: any) => {
       if (selectedConversation && data.conversationId === selectedConversation._id) {
+        const incoming = data.message || data
+        const incomingSenderId = getSenderId(incoming.sender)
         setMessages((prev) => {
           // Avoid duplicates
-          if (prev.some(m => m._id === data._id)) return prev
+          if (prev.some(m => m._id === incoming._id)) return prev
           return [...prev, {
-            _id: data._id || `temp-${Date.now()}`,
-            sender: data.sender,
-            content: data.content,
-            createdAt: data.createdAt,
+            _id: incoming._id || `temp-${Date.now()}`,
+            sender: incoming.sender,
+            content: incoming.content,
+            createdAt: incoming.createdAt,
+            read: false,
+            delivered: false,
           }]
         })
+        // We are viewing the chat, so acknowledge their message right away
+        if (incomingSenderId && incomingSenderId !== user?._id) {
+          const conversationId = selectedConversation._id
+          api.put(`/messages/${conversationId}/delivered`).catch(() => {})
+          api.put(`/messages/${conversationId}/read`).catch(() => {})
+        }
       }
     })
     return cleanup
-  }, [selectedConversation, onNewMessage])
+  }, [selectedConversation, onNewMessage, user?._id])
 
   // Listen for new message notifications (to update conversation list)
   useEffect(() => {
     const cleanup = onNewMessageNotification((data: any) => {
-      setConversations((prev) =>
-        prev.map((c) =>
+      setConversations((prev) => {
+        const target = prev.find((c) => c._id === data.conversationId)
+        if (!target) {
+          // Brand-new conversation — refresh so it appears in the list
+          fetchConversations()
+          return prev
+        }
+        return prev.map((c) =>
           c._id === data.conversationId
             ? {
                 ...c,
-                lastMessage: {
-                  content: data.message.content,
-                  createdAt: data.message.createdAt,
-                },
+                lastMessage: data.message
+                  ? { content: data.message.content, createdAt: data.message.createdAt }
+                  : c.lastMessage,
                 unreadCount: c._id === selectedConversation?._id ? 0 : c.unreadCount + 1,
               }
             : c
         )
-      )
+      })
     })
     return cleanup
   }, [selectedConversation, onNewMessageNotification])
@@ -127,6 +169,22 @@ export default function MessagesPage() {
     try {
       const res = await api.get('/messages/conversations')
       setConversations(res.data.conversations)
+
+      // Auto-open a conversation we were navigated to from a profile
+      const pending = pendingConversationRef.current
+      if (pending) {
+        pendingConversationRef.current = null
+        const existing = res.data.conversations.find((c: Conversation) => c._id === pending.conversationId)
+        if (existing) {
+          setSelectedConversation(existing)
+        } else {
+          setSelectedConversation({
+            _id: pending.conversationId,
+            participant: pending.participant,
+            unreadCount: 0,
+          })
+        }
+      }
     } catch (error) {
       console.error('Failed to fetch conversations')
     } finally {
@@ -138,7 +196,11 @@ export default function MessagesPage() {
     try {
       const res = await api.get(`/messages/${conversationId}`)
       setMessages(res.data.messages)
-      await api.put(`/messages/${conversationId}/read`)
+      // The chat is open, so acknowledge the other user's messages (delivered -> read)
+      await Promise.allSettled([
+        api.put(`/messages/${conversationId}/delivered`),
+        api.put(`/messages/${conversationId}/read`),
+      ])
       setConversations((prev) =>
         prev.map((c) => (c._id === conversationId ? { ...c, unreadCount: 0 } : c))
       )
@@ -146,6 +208,24 @@ export default function MessagesPage() {
       console.error('Failed to fetch messages')
     }
   }
+
+  // Pull the read/delivered state of our own sent messages so ✓ / ✓✓ stay accurate
+  const syncReceipts = useCallback(async (conversationId: string) => {
+    try {
+      const res = await api.get(`/messages/${conversationId}/status`)
+      const statusMap = new Map<string, { delivered: boolean; read: boolean }>(
+        res.data.status.map((s: any) => [s.messageId, { delivered: !!s.delivered, read: !!s.read }])
+      )
+      setMessages((prev) =>
+        prev.map((m) => {
+          const status = statusMap.get(m._id)
+          return status ? { ...m, delivered: status.delivered, read: status.read } : m
+        })
+      )
+    } catch (error) {
+      // Receipt sync is best-effort
+    }
+  }, [])
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -156,13 +236,13 @@ export default function MessagesPage() {
     setSending(true)
 
     try {
-      // Send via API (persists to DB) and Socket (real-time)
+      // POST /messages persists the message and broadcasts it to the other
+      // participant over the socket, so we only append the API response here.
       const res = await api.post('/messages', {
         conversationId: selectedConversation._id,
         content,
       })
       setMessages((prev) => [...prev, res.data.message])
-      socketSendMessage(selectedConversation._id, content)
     } catch (error) {
       console.error('Failed to send message')
       setNewMessage(content) // Restore on failure
@@ -183,6 +263,18 @@ export default function MessagesPage() {
       stopTyping(selectedConversation._id)
     }, 2000)
   }, [selectedConversation, startTyping, stopTyping])
+
+  // Listen for read/delivered receipts so our sent messages show ✓ / ✓✓
+  useEffect(() => {
+    const handleReceipt = (data: any) => {
+      if (selectedConversation && data.conversationId === selectedConversation._id) {
+        syncReceipts(selectedConversation._id)
+      }
+    }
+    const cleanupDelivered = onMessagesDelivered(handleReceipt)
+    const cleanupRead = onMessagesRead(handleReceipt)
+    return () => { cleanupDelivered(); cleanupRead() }
+  }, [selectedConversation, onMessagesDelivered, onMessagesRead, syncReceipts])
 
   return (
     <div className="flex h-[calc(100vh-57px)]">
@@ -262,25 +354,39 @@ export default function MessagesPage() {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map((msg) => (
-                <div
-                  key={msg._id}
-                  className={`flex ${msg.sender === user?._id ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-xs px-4 py-2 rounded-2xl ${
-                      msg.sender === user?._id
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-800 text-white border border-gray-700'
-                    }`}
-                  >
-                    <p>{msg.content}</p>
-                    <p className={`text-xs mt-1 ${msg.sender === user?._id ? 'text-blue-200' : 'text-gray-500'}`}>
-                      {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
-                    </p>
+              {messages.map((msg) => {
+                const isOwn = getSenderId(msg.sender) === user?._id
+                return (
+                  <div key={msg._id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-xs px-4 py-2 rounded-2xl ${
+                        isOwn
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-800 text-white border border-gray-700'
+                      }`}
+                    >
+                      <p>{msg.content}</p>
+                      <div
+                        className={`flex items-center justify-end gap-1.5 mt-1 text-xs ${
+                          isOwn ? 'text-blue-200' : 'text-gray-500'
+                        }`}
+                      >
+                        <span>
+                          {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
+                        </span>
+                        {isOwn && (
+                          <span
+                            className="font-semibold"
+                            title={msg.read ? 'Read' : msg.delivered ? 'Delivered' : 'Sent'}
+                          >
+                            {msg.read ? '✓✓' : msg.delivered ? '✓' : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
               <div ref={messagesEndRef} />
             </div>
 

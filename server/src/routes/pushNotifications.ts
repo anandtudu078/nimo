@@ -51,7 +51,7 @@ router.post('/unregister', auth, async (req: AuthRequest, res: Response) => {
 router.post('/test', auth, async (req: AuthRequest, res: Response) => {
   try {
     const success = await sendPushToUser(
-      req.userId,
+      req.userId!,
       'Test Notification',
       'Push notifications are working! 🎉',
       { type: 'test' }
