@@ -18,6 +18,5 @@ const hashtagSchema = new Schema<IHashtag>(
 )
 
 hashtagSchema.index({ count: -1 })
-hashtagSchema.index({ tag: 1 })
 
 export default mongoose.model<IHashtag>('Hashtag', hashtagSchema)
