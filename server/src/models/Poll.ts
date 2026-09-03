@@ -32,7 +32,6 @@ const pollSchema = new Schema<IPoll>(
   { timestamps: true }
 )
 
-pollSchema.index({ post: 1 })
 pollSchema.index({ endsAt: 1 })
 
 export default mongoose.model<IPoll>('Poll', pollSchema)
