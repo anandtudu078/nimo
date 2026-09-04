@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { FaHeart, FaComment, FaShare, FaBookmark, FaEllipsisH, FaEdit, FaTrash, FaFlag } from 'react-icons/fa'
+import { FaHeart, FaComment, FaShare, FaBookmark, FaEllipsisH, FaEdit, FaTrash, FaFlag, FaSmile } from 'react-icons/fa'
 import ReportModal from './ReportModal'
 import { formatDistanceToNow } from 'date-fns'
 import api from '../services/api'
@@ -13,6 +13,9 @@ interface PostCardProps {
   onDelete?: (id: string) => void
   onEdit?: (id: string, data: { content: string; images: string[] }) => void
 }
+
+// Must match VALID_EMOJIS in server/src/routes/reactions.ts
+const REACTION_EMOJIS = ['❤️', '🔥', '😂', '😮', '😢', '👍']
 
 export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
   const { user } = useAuth()
@@ -28,6 +31,9 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
   const [bookmarked, setBookmarked] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showReport, setShowReport] = useState(false)
+  const [reactionCounts, setReactionCounts] = useState<Record<string, number>>({})
+  const [userReaction, setUserReaction] = useState<string | null>(null)
+  const [showReactionPicker, setShowReactionPicker] = useState(false)
 
   const handleLike = async () => {
     try {
@@ -89,6 +95,40 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
       setBookmarked(res.data.bookmarked)
     } catch (error) {
       console.error('Failed to toggle bookmark')
+    }
+  }
+
+  // Load reaction counts and the current user's own reaction
+  useEffect(() => {
+    let mounted = true
+    api
+      .get(`/reactions/${post._id}`)
+      .then((res) => {
+        if (!mounted) return
+        const grouped = res.data.reactions as Record<string, { _id: string }[]>
+        const counts: Record<string, number> = {}
+        let own: string | null = null
+        for (const [emoji, users] of Object.entries(grouped)) {
+          counts[emoji] = users.length
+          if (users.some((u) => u._id === user?._id)) own = emoji
+        }
+        setReactionCounts(counts)
+        setUserReaction(own)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [post._id, user?._id])
+
+  const handleReact = async (emoji: string) => {
+    setShowReactionPicker(false)
+    try {
+      const res = await api.post(`/reactions/${post._id}`, { emoji })
+      setReactionCounts(res.data.reactionCounts || {})
+      setUserReaction(res.data.reacted ? res.data.emoji : null)
+    } catch (error) {
+      console.error('Failed to react to post')
     }
   }
 
@@ -214,6 +254,32 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
           <FaComment />
           <span>{comments.length}</span>
         </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowReactionPicker(!showReactionPicker)}
+            className={`flex items-center gap-1.5 hover:text-pink-500 transition-colors ${userReaction ? 'text-pink-500' : ''}`}
+            title="React"
+          >
+            {userReaction ? <span className="text-base leading-none">{userReaction}</span> : <FaSmile />}
+          </button>
+          {showReactionPicker && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowReactionPicker(false)} />
+              <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 bg-black border border-gray-700 rounded-full px-3 py-2 flex gap-1.5 shadow-xl">
+                {REACTION_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => handleReact(emoji)}
+                    className={`text-2xl hover:scale-125 transition-transform ${userReaction === emoji ? 'scale-110' : ''}`}
+                    title={emoji}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         <button className="flex items-center gap-1.5 hover:text-green-500 transition-colors">
           <FaShare />
         </button>
@@ -221,6 +287,20 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
           <FaBookmark fill={bookmarked ? 'currentColor' : 'none'} />
         </button>
       </div>
+
+      {/* Reaction Counts */}
+      {Object.keys(reactionCounts).length > 0 && (
+        <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+          {Object.entries(reactionCounts)
+            .filter(([, count]) => count > 0)
+            .map(([emoji, count]) => (
+              <span key={emoji} className="flex items-center gap-1">
+                <span className="text-base leading-none">{emoji}</span>
+                <span>{count}</span>
+              </span>
+            ))}
+        </div>
+      )}
 
       {/* Comments Section */}
       {showComments && (
