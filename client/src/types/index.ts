@@ -45,3 +45,15 @@ export interface ConversationParticipant {
   displayName: string
   avatar?: string
 }
+
+export type ReactionEmoji = '❤️' | '🔥' | '😂' | '😮' | '😢' | '👍'
+
+export interface ReactionUser {
+  _id: string
+  username: string
+  displayName: string
+  avatar?: string
+}
+
+// GET /reactions/:postId returns a map of emoji -> users who reacted
+export type ReactionGroups = Record<string, ReactionUser[]>
