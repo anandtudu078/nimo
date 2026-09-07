@@ -7,6 +7,8 @@ import { useAuth } from '../contexts/AuthContext'
 import type { Post } from '../types'
 import { FaImage, FaTimes, FaSpinner } from 'react-icons/fa'
 
+export type FeedTab = 'foryou' | 'following'
+
 export default function FeedPage() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<Post[]>([])
@@ -17,14 +19,15 @@ export default function FeedPage() {
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [tab, setTab] = useState<FeedTab>('foryou')
 
   useEffect(() => {
     fetchPosts()
-  }, [])
+  }, [tab])
 
   const fetchPosts = async () => {
     try {
-      const res = await api.get('/posts/feed')
+      const res = await api.get('/posts/feed', { params: { tab } })
       setPosts(res.data.posts)
     } catch (error) {
       console.error('Failed to fetch posts')
@@ -107,6 +110,31 @@ export default function FeedPage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex border-b border-gray-800 sticky top-[57px] bg-black/80 backdrop-blur-md z-10">
+        {(
+          [
+            { key: 'foryou', label: 'For You' },
+            { key: 'following', label: 'Following' },
+          ] as { key: FeedTab; label: string }[]
+        ).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex-1 py-3 text-sm font-medium transition-colors hover:bg-gray-900 ${
+              tab === key
+                ? 'text-white font-bold relative'
+                : 'text-gray-500'
+            }`}
+          >
+            {label}
+            {tab === key && (
+              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-1 bg-blue-500 rounded-full" />
+            )}
+          </button>
+        ))}
+      </div>
+
       {/* New Post Composer */}
       <div className="border-b border-gray-800 p-4">
         <form onSubmit={handleCreatePost}>
@@ -172,8 +200,17 @@ export default function FeedPage() {
         <LoadingSpinner />
       ) : posts.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
-          <p className="text-lg font-medium">No posts yet</p>
-          <p className="mt-1">Be the first to share something!</p>
+          {tab === 'following' ? (
+            <>
+              <p className="text-lg font-medium">Nothing here yet</p>
+              <p className="mt-1">Follow people from Explore to see their posts here.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-lg font-medium">No posts yet</p>
+              <p className="mt-1">Be the first to share something!</p>
+            </>
+          )}
         </div>
       ) : (
         <div>
