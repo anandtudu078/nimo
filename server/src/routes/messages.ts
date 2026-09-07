@@ -1,10 +1,22 @@
 import { Router, Response } from 'express'
 import { Message, Conversation } from '../models/Message'
 import User from '../models/User'
+import Connection from '../models/Connection'
 import { auth, AuthRequest } from '../middleware/auth'
 import { emitToUser } from '../config/socket'
 
 const router = Router()
+
+// Users must have an accepted connection before they can message each other
+async function requireConnection(a: string | undefined, b: string): Promise<boolean> {
+  if (!a) return false
+  const connection = await Connection.findOne({
+    requester: { $in: [a, b] },
+    recipient: { $in: [a, b] },
+    status: 'accepted',
+  })
+  return !!connection
+}
 
 // Get all conversations
 router.get('/conversations', auth, async (req: AuthRequest, res: Response) => {
@@ -64,6 +76,15 @@ router.post('/conversation/:userId', auth, async (req: AuthRequest, res: Respons
       return res.status(404).json({ message: 'User not found' })
     }
 
+    // Messaging requires an accepted connection
+    const connected = await requireConnection(req.userId, String(req.params.userId))
+    if (!connected) {
+      return res.status(403).json({
+        message: 'You need to connect with this user before messaging them',
+        code: 'CONNECTION_REQUIRED',
+      })
+    }
+
     // Check if conversation already exists
     let conversation = await Conversation.findOne({
       participants: { $all: [req.userId, req.params.userId] },
@@ -101,6 +122,28 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
   try {
     const { conversationId, content } = req.body
 
+    // Guard: messaging requires an accepted connection
+    const conversation = await Conversation.findById(conversationId)
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' })
+    }
+    const isParticipant = conversation.participants.some(
+      (p: any) => p.toString() === req.userId
+    )
+    if (!isParticipant) {
+      return res.status(403).json({ message: 'Not a participant of this conversation' })
+    }
+    const connected = await requireConnection(
+      req.userId,
+      conversation.participants.find((p: any) => p.toString() !== req.userId)?.toString() || ''
+    )
+    if (!connected) {
+      return res.status(403).json({
+        message: 'You are no longer connected with this user',
+        code: 'CONNECTION_REQUIRED',
+      })
+    }
+
     const message = new Message({
       conversation: conversationId,
       sender: req.userId,
@@ -117,7 +160,6 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
     })
 
     // Emit real-time event to other participants
-    const conversation = await Conversation.findById(conversationId)
     if (conversation) {
       const io = req.app.get('io')
       conversation.participants.forEach((participantId: any) => {

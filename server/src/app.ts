@@ -18,6 +18,7 @@ import pollRoutes from './routes/polls'
 import reactionRoutes from './routes/reactions'
 import repostRoutes from './routes/reposts'
 import viewRoutes from './routes/views'
+import connectionRoutes from './routes/connections'
 import { apiLimiter, authLimiter, postLimiter } from './middleware/rateLimit'
 
 dotenv.config()
@@ -88,6 +89,7 @@ app.use('/api/polls', apiLimiter, pollRoutes)
 app.use('/api/reactions', apiLimiter, reactionRoutes)
 app.use('/api/reposts', apiLimiter, repostRoutes)
 app.use('/api/views', apiLimiter, viewRoutes)
+app.use('/api/connections', apiLimiter, connectionRoutes)
 
 // Health check
 app.get('/api/health', (_req, res) => {
