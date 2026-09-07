@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { FaHeart, FaComment, FaShare, FaBookmark, FaEllipsisH, FaEdit, FaTrash, FaFlag, FaSmile } from 'react-icons/fa'
 import ReportModal from './ReportModal'
@@ -16,6 +16,62 @@ interface PostCardProps {
 
 // Must match VALID_EMOJIS in server/src/routes/reactions.ts
 const REACTION_EMOJIS = ['❤️', '🔥', '😂', '😮', '😢', '👍']
+
+// Cache of resolved mention handles -> user ids ('' = lookup failed/not found)
+const mentionCache = new Map<string, string>()
+
+// Renders post/comment text with clickable #hashtags and @mentions.
+// Mentions are resolved to profile links via /users/username/:username.
+function RichText({ content }: { content: string }) {
+  const [mentions, setMentions] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    const handles = new Set(
+      (content.match(/@(\w+)/g) || []).map((m) => m.slice(1).toLowerCase())
+    )
+    handles.forEach(async (handle) => {
+      if (mentionCache.has(handle)) {
+        const cached = mentionCache.get(handle)!
+        if (cached) setMentions((prev) => ({ ...prev, [handle]: cached }))
+        return
+      }
+      try {
+        const res = await api.get(`/users/username/${handle}`)
+        mentionCache.set(handle, res.data.user._id)
+        setMentions((prev) => ({ ...prev, [handle]: res.data.user._id }))
+      } catch {
+        mentionCache.set(handle, '')
+      }
+    })
+  }, [content])
+
+  const parts = content.split(/(\s+)/)
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (/^#\w+$/.test(part) && part.length > 1) {
+          return (
+            <Link key={i} to={`/hashtag/${part.slice(1)}`} className="text-blue-400 hover:underline">
+              {part}
+            </Link>
+          )
+        }
+        if (/^@\w+$/.test(part) && part.length > 1) {
+          const handle = part.slice(1).toLowerCase()
+          const userId = mentions[handle]
+          return userId ? (
+            <Link key={i} to={`/profile/${userId}`} className="text-blue-400 hover:underline">
+              {part}
+            </Link>
+          ) : (
+            <span key={i} className="text-blue-400/70">{part}</span>
+          )
+        }
+        return <span key={i}>{part}</span>
+      })}
+    </>
+  )
+}
 
 export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
   const { user } = useAuth()
@@ -137,23 +193,6 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
     setEditContent(post.content)
   }
 
-  // Render content with clickable hashtags
-  const renderedContent = useMemo(() => {
-    if (!post.content) return null
-    const parts = post.content.split(/(\s+)/)
-    return parts.map((part, i) => {
-      if (part.startsWith('#') && part.length > 1 && /^#\w+$/.test(part)) {
-        const tag = part.slice(1)
-        return (
-          <Link key={i} to={`/hashtag/${tag}`} className="text-blue-400 hover:underline">
-            {part}
-          </Link>
-        )
-      }
-      return <span key={i}>{part}</span>
-    })
-  }, [post.content])
-
   return (
     <article className="border-b border-gray-800 p-4 hover:bg-gray-950 transition-colors">
       {/* Header */}
@@ -217,7 +256,7 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
           </div>
         </div>
       ) : (
-        <p className="mb-3 whitespace-pre-wrap text-white">{renderedContent}</p>
+        <p className="mb-3 whitespace-pre-wrap text-white">{post.content && <RichText content={post.content} />}</p>
       )}
 
       {/* Image Carousel */}
@@ -311,7 +350,7 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
               <div className="flex-1">
                 <div className="bg-gray-900 rounded-2xl px-3 py-2">
                   <span className="font-semibold text-sm text-white">{comment.author.displayName}</span>
-                  <p className="text-sm text-gray-300">{comment.content}</p>
+                  <p className="text-sm text-gray-300"><RichText content={comment.content} /></p>
                 </div>
                 <p className="text-xs text-gray-600 mt-1 ml-3">
                   {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
