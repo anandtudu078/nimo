@@ -4,6 +4,11 @@ import app from './app'
 import { setupSocketIO } from './config/socket'
 import { initCache } from './config/redis'
 
+// Boot marker: printed on every start so deployed logs unambiguously show
+// which build is actually running (guards against stale build-cache deploys).
+const BOOT_VERSION = '2026-09-07-cache-bust-1'
+console.log(`🏷️  [boot] nimo-server ${BOOT_VERSION} (node ${process.version})`)
+
 const PORT = process.env.PORT || 5000
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/nimo'
 
