@@ -81,27 +81,37 @@ router.post('/', auth, spamFilter, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Get feed (all posts, newest first)
+// Get feed — tab=following (posts from people you follow + your own) or tab=foryou (default, all posts)
 router.get('/feed', auth, async (req: AuthRequest, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1
     const limit = parseInt(req.query.limit as string) || 20
     const skip = (page - 1) * limit
+    const tab = req.query.tab === 'following' ? 'following' : 'foryou'
 
     // Exclude posts from blocked users
-    const currentUser = await User.findById(req.userId).select('blockedUsers')
+    const currentUser = await User.findById(req.userId).select('blockedUsers following')
     const blockedIds = currentUser?.blockedUsers || []
 
-    const posts = await Post.find({ author: { $nin: blockedIds } })
+    let authorFilter: Record<string, any> = { $nin: blockedIds }
+    if (tab === 'following') {
+      const followingIds = currentUser?.following || []
+      // Include your own posts so the tab is never empty of your own activity
+      const visibleIds = [...followingIds, req.userId]
+      authorFilter = { $in: visibleIds, $nin: blockedIds }
+    }
+
+    const query = { author: authorFilter }
+    const posts = await Post.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .populate('author', 'username displayName avatar')
       .populate('comments.author', 'username displayName avatar')
 
-    const total = await Post.countDocuments({ author: { $nin: blockedIds } })
+    const total = await Post.countDocuments(query)
 
-    res.json({ posts, total, page, pages: Math.ceil(total / limit) })
+    res.json({ posts, total, page, pages: Math.ceil(total / limit), tab })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to fetch posts' })
   }
