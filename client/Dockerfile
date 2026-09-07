@@ -1,13 +1,20 @@
+# syntax=docker/dockerfile:1
+
 # Build stage
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files first for better layer caching
-COPY package.json ./
+# VITE_API_URL is baked in at build time (Vite inlines env vars into the bundle).
+# Set it to the public API origin in production, e.g.:
+#   docker build --build-arg VITE_API_URL=https://api.example.com .
+# Leave empty for same-origin setups (nginx proxies /api and /socket.io/).
+ARG VITE_API_URL=""
+ENV VITE_API_URL=$VITE_API_URL
 
-# Install all dependencies (use npm install instead of npm ci to avoid Windows lock file issues)
-RUN npm install
+# Copy lockfile + manifest for reproducible installs
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Copy source code (excluding node_modules, dist via .dockerignore)
 COPY . .

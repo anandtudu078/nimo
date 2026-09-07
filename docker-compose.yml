@@ -4,13 +4,19 @@ services:
     image: mongo:7
     container_name: nimo-mongodb
     ports:
-      - "5000:27017"
+      - "27017:27017"   # host 5000 collided with the API server port
     volumes:
       - mongodb_data:/data/db
     environment:
       - MONGO_INITDB_ROOT_USERNAME=admin
       - MONGO_INITDB_ROOT_PASSWORD=password
       - MONGO_INITDB_DATABASE=nimo
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # Backend API server
   server:
@@ -24,9 +30,14 @@ services:
       - PORT=5000
       - MONGODB_URI=mongodb://admin:password@mongodb:27017/nimo?authSource=admin
       - JWT_SECRET=your-super-secret-jwt-key-change-in-production
-      - CLIENT_URL=http://localhost:5174
+      - CLIENT_URLS=http://localhost:5174,http://localhost:5173
+      # Optional image uploads — set these or /api/upload returns 500
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     restart: unless-stopped
 
   # Frontend client
@@ -34,11 +45,12 @@ services:
     build:
       context: ./client
       dockerfile: Dockerfile
+      args:
+        # Same-origin: nginx proxies /api and /socket.io/ to the server container
+        VITE_API_URL: ""
     container_name: nimo-client
     ports:
       - "5174:5173"
-    environment:
-      - VITE_API_URL=http://localhost:5001
     depends_on:
       - server
     restart: unless-stopped

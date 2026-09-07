@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'
+// Socket server URL: derive from VITE_API_URL (/api → server root), else same origin.
+// Never fall back to localhost — that breaks every deployed environment.
+const SOCKET_URL = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') || window.location.origin
 
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null)
