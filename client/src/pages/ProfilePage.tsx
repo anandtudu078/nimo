@@ -7,8 +7,10 @@ import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { User, Post } from '../types'
 import { formatDistanceToNow } from 'date-fns'
-import { FaCamera, FaTimes, FaTrash, FaBan, FaFlag, FaEnvelope } from 'react-icons/fa'
+import { FaCamera, FaTimes, FaTrash, FaBan, FaFlag, FaEnvelope, FaUserPlus, FaUserCheck, FaUserClock } from 'react-icons/fa'
 import ReportModal from '../components/ReportModal'
+
+type ConnectionStatus = 'none' | 'pending_outgoing' | 'pending_incoming' | 'accepted'
 
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>()
@@ -20,6 +22,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'posts' | 'likes'>('posts')
   const [isFollowing, setIsFollowing] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('none')
+  const [connectionBusy, setConnectionBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState({ displayName: '', bio: '', avatar: '', studyYear: '' })
   const [saving, setSaving] = useState(false)
@@ -42,15 +46,22 @@ export default function ProfilePage() {
 
   const fetchProfile = async () => {
     try {
-      const [userRes, postsRes, likedRes] = await Promise.all([
+      const [userRes, postsRes, likedRes, connRes] = await Promise.all([
         api.get(`/users/${userId}`),
         api.get(`/posts/user/${userId}`),
         api.get(`/posts/user/${userId}/liked`),
+        api.get(`/connections/status/${userId}`),
       ])
       setProfileUser(userRes.data.user)
       setPosts(postsRes.data.posts)
       setLikedPosts(likedRes.data.posts)
       setIsFollowing(userRes.data.user.followers.includes(currentUser?._id))
+
+      // Map the server status + direction onto a UI state
+      const { status, direction } = connRes.data
+      if (status === 'accepted') setConnectionStatus('accepted')
+      else if (status === 'pending') setConnectionStatus(direction === 'outgoing' ? 'pending_outgoing' : 'pending_incoming')
+      else setConnectionStatus('none')
     } catch (error) {
       console.error('Failed to fetch profile')
     } finally {
@@ -68,6 +79,42 @@ export default function ProfilePage() {
       }
     } catch (error) {
       console.error('Failed to block user')
+    }
+  }
+
+  const handleConnect = async () => {
+    if (!userId || connectionBusy) return
+    setConnectionBusy(true)
+    try {
+      if (connectionStatus === 'accepted' || connectionStatus === 'pending_outgoing') {
+        await api.delete(`/connections/${userId}`)
+        setConnectionStatus('none')
+      } else if (connectionStatus === 'pending_incoming') {
+        await api.post(`/connections/${userId}/decline`)
+        setConnectionStatus('none')
+      } else {
+        await api.post(`/connections/${userId}/request`)
+        setConnectionStatus('pending_outgoing')
+      }
+    } catch (error: any) {
+      console.error('Failed to update connection', error?.response?.data?.message || error)
+      alert(error?.response?.data?.message || 'Failed to update connection')
+    } finally {
+      setConnectionBusy(false)
+    }
+  }
+
+  const handleAcceptConnection = async () => {
+    if (!userId || connectionBusy) return
+    setConnectionBusy(true)
+    try {
+      await api.post(`/connections/${userId}/accept`)
+      setConnectionStatus('accepted')
+    } catch (error: any) {
+      console.error('Failed to accept connection', error)
+      alert(error?.response?.data?.message || 'Failed to accept connection')
+    } finally {
+      setConnectionBusy(false)
     }
   }
 
@@ -215,14 +262,58 @@ export default function ProfilePage() {
           </div>
           {!isOwnProfile && (
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleMessage}
-                className="btn-secondary flex items-center gap-2"
-                title="Send a message"
-              >
-                <FaEnvelope size={14} />
-                Message
-              </button>
+              {connectionStatus === 'accepted' ? (
+                <button
+                  onClick={handleMessage}
+                  className="btn-secondary flex items-center gap-2"
+                  title="Send a message"
+                >
+                  <FaEnvelope size={14} />
+                  Message
+                </button>
+              ) : (
+                <button
+                  onClick={handleConnect}
+                  disabled={connectionBusy}
+                  className={
+                    connectionStatus === 'pending_incoming'
+                      ? 'btn-primary flex items-center gap-2'
+                      : 'btn-secondary flex items-center gap-2'
+                  }
+                  title={
+                    connectionStatus === 'pending_outgoing'
+                      ? 'Cancel request'
+                      : connectionStatus === 'pending_incoming'
+                      ? 'Decline request'
+                      : 'Connect to message this user'
+                  }
+                >
+                  {connectionStatus === 'none' && (
+                    <>
+                      <FaUserPlus size={14} /> Connect
+                    </>
+                  )}
+                  {connectionStatus === 'pending_outgoing' && (
+                    <>
+                      <FaUserClock size={14} /> Requested
+                    </>
+                  )}
+                  {connectionStatus === 'pending_incoming' && (
+                    <>
+                      <FaUserClock size={14} /> Decline
+                    </>
+                  )}
+                </button>
+              )}
+              {connectionStatus === 'pending_incoming' && (
+                <button
+                  onClick={handleAcceptConnection}
+                  disabled={connectionBusy}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <FaUserCheck size={14} /> Accept
+                </button>
+              )}
               <button
                 onClick={handleFollow}
                 className={isFollowing ? 'btn-secondary' : 'btn-primary'}
