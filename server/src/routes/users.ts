@@ -8,6 +8,11 @@ import { upload, uploadToCloudinary } from '../config/cloudinary'
 
 const router = Router()
 
+// Case-insensitive exact username match (usernames keep original case in the DB)
+function exactCaseInsensitive(username: string) {
+  return new RegExp(`^${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+}
+
 // Upload avatar (via Cloudinary)
 // Wrap multer middleware to catch promise rejections (multer v2 is async)
 const handleAvatarUpload = async (req: AuthRequest, res: Response) => {
@@ -222,6 +227,20 @@ router.get('/me/blocked', auth, async (req: AuthRequest, res: Response) => {
     res.json({ blockedUsers: user.blockedUsers })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to get blocked users' })
+  }
+})
+
+// Look up a user by username (for @mention links)
+router.get('/username/:username', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findOne({ username: exactCaseInsensitive(String(req.params.username)) })
+      .select('_id username displayName avatar')
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+    res.json({ user })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to get user' })
   }
 })
 

@@ -14,6 +14,49 @@ function extractHashtags(text: string): string[] {
   return matches ? [...new Set(matches.map((h) => h.slice(1).toLowerCase()))] : []
 }
 
+// Helper: extract @mentions (lowercased usernames)
+function extractMentions(text: string): string[] {
+  const matches = text.match(/@(\w+)/g)
+  return matches ? [...new Set(matches.map((m) => m.slice(1).toLowerCase()))] : []
+}
+
+// Resolve mentioned usernames to users, skipping the mention's author.
+// Usernames keep their original case in the DB, so match case-insensitively.
+function exactCaseInsensitive(username: string) {
+  return new RegExp(`^${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+}
+
+async function resolveMentionedUsers(text: string, authorId: string) {
+  const usernames = extractMentions(text)
+  if (usernames.length === 0) return []
+  return User.find({
+    $or: usernames.map((u) => ({ username: exactCaseInsensitive(u) })),
+    _id: { $ne: authorId },
+  }).select('_id username blockedUsers')
+}
+
+// Create mention notifications, respecting blocks and skipping duplicates
+async function createMentionNotifications(
+  mentionedUsers: any[],
+  fromUserId: string,
+  postId: any
+) {
+  if (mentionedUsers.length === 0) return
+  const author = await User.findById(fromUserId).select('blockedUsers')
+  const authorBlocked = (author?.blockedUsers || []).map((id: any) => id.toString())
+
+  const seen = new Set<string>()
+  for (const mentioned of mentionedUsers) {
+    const userId = mentioned._id.toString()
+    if (seen.has(userId)) continue
+    seen.add(userId)
+    // Skip if either side has blocked the other
+    const targetBlocked = (mentioned.blockedUsers || []).map((id: any) => id.toString())
+    if (authorBlocked.includes(userId) || targetBlocked.includes(fromUserId)) continue
+    await Notification.create({ user: userId, from: fromUserId, type: 'mention', post: postId })
+  }
+}
+
 // Helper: update hashtag counts
 async function updateHashtags(tags: string[], delta: number) {
   for (const tag of tags) {
@@ -74,6 +117,10 @@ router.post('/', auth, spamFilter, async (req: AuthRequest, res: Response) => {
     // Track hashtags
     const tags = extractHashtags(content || '')
     if (tags.length > 0) await updateHashtags(tags, 1)
+
+    // Notify mentioned users
+    const mentioned = await resolveMentionedUsers(content || '', req.userId!)
+    await createMentionNotifications(mentioned, req.userId!, post._id)
 
     res.status(201).json(post)
   } catch (error: any) {
@@ -192,7 +239,7 @@ router.post('/:id/comment', auth, spamFilter, async (req: AuthRequest, res: Resp
     await post.populate({ path: 'comments.author', select: 'username displayName avatar' })
     const newComment = post.comments[post.comments.length - 1]
 
-    // Create notification
+    // Create notification for the post author
     if (post.author.toString() !== req.userId) {
       await Notification.create({
         user: post.author,
@@ -201,6 +248,10 @@ router.post('/:id/comment', auth, spamFilter, async (req: AuthRequest, res: Resp
         post: post._id,
       })
     }
+
+    // Notify mentioned users (a comment can mention anyone, including the author)
+    const mentioned = await resolveMentionedUsers(content, req.userId!)
+    await createMentionNotifications(mentioned, req.userId!, post._id)
 
     res.status(201).json(newComment)
   } catch (error: any) {
@@ -222,6 +273,7 @@ router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
 
     // Decrement old hashtags
     const oldTags = extractHashtags(post.content)
+    const oldMentions = extractMentions(post.content)
 
     if (content !== undefined) post.content = content
     if (images !== undefined) post.images = images
@@ -233,6 +285,18 @@ router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
     const addedTags = newTags.filter((t) => !oldTags.includes(t))
     if (removedTags.length > 0) await updateHashtags(removedTags, -1)
     if (addedTags.length > 0) await updateHashtags(addedTags, 1)
+
+    // Notify only newly mentioned users (edits don't re-ping existing mentions)
+    const newMentions = extractMentions(post.content)
+    const addedMentions = newMentions.filter((m) => !oldMentions.includes(m))
+    if (addedMentions.length > 0) {
+      const mentioned = await User.find({
+        $or: addedMentions.map((u) => ({ username: exactCaseInsensitive(u) })),
+        _id: { $ne: req.userId },
+      }).select('_id username blockedUsers')
+      await createMentionNotifications(mentioned, req.userId!, post._id)
+    }
+
     await post.populate('author', 'username displayName avatar')
     await post.populate('comments.author', 'username displayName avatar')
 
