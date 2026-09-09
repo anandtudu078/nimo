@@ -54,6 +54,7 @@ export interface Post {
   poll?: Poll
   quotedPost?: Post
   shareCount?: number
+  viewCount?: number
   createdAt: string
 }
 

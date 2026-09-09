@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Avatar from '../components/Avatar'
@@ -17,6 +17,7 @@ interface Notification {
 }
 
 export default function NotificationsPage() {
+  const navigate = useNavigate()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'mentions'>('all')
@@ -53,6 +54,15 @@ export default function NotificationsPage() {
       ))
     } catch (error) {
       console.error('Failed to mark notification as read')
+    }
+  }
+
+  const handleNotificationClick = (notification: Notification) => {
+    markAsRead(notification._id)
+    if (notification.post?._id) {
+      navigate(`/post/${notification.post._id}`)
+    } else if (notification.from?._id) {
+      navigate(`/profile/${notification.from._id}`)
     }
   }
 
@@ -131,7 +141,7 @@ export default function NotificationsPage() {
           filteredNotifications.map((notification) => (
             <div
               key={notification._id}
-              onClick={() => markAsRead(notification._id)}
+              onClick={() => handleNotificationClick(notification)}
               className={`flex items-start gap-3 p-4 border-b border-gray-800 cursor-pointer hover:bg-gray-950 transition-colors ${
                 !notification.read ? 'bg-blue-950/20' : ''
               }`}
@@ -152,9 +162,11 @@ export default function NotificationsPage() {
                   <span className="text-gray-500">{getMessage(notification)}</span>
                 </div>
                 {notification.post && (
-                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">{notification.post.content}</p>
+                  <p className="text-sm text-gray-400 mt-1 line-clamp-2 bg-gray-900/60 p-2 rounded-xl border border-gray-800/80">
+                    {notification.post.content}
+                  </p>
                 )}
-                <p className="text-xs text-gray-600 mt-1">
+                <p className="text-xs text-gray-600 mt-1.5">
                   {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                 </p>
               </div>
