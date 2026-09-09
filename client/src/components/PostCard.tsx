@@ -11,6 +11,8 @@ import {
   FaSmile,
   FaRetweet,
   FaQuoteRight,
+  FaLink,
+  FaEye,
 } from 'react-icons/fa'
 import ReportModal from './ReportModal'
 import PollCard from './PollCard'
@@ -100,6 +102,7 @@ export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardPr
   const [bookmarked, setBookmarked] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showReport, setShowReport] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
   const [reactionCounts, setReactionCounts] = useState<Record<string, number>>({})
   const [userReaction, setUserReaction] = useState<string | null>(null)
   const [showReactionPicker, setShowReactionPicker] = useState(false)
@@ -192,6 +195,14 @@ export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardPr
     }
   }
 
+  const handleCopyLink = () => {
+    setShowMenu(false)
+    const url = `${window.location.origin}/post/${post._id}`
+    navigator.clipboard.writeText(url)
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 2000)
+  }
+
   // Toggle Repost
   const handleToggleRepost = async () => {
     setShowRepostMenu(false)
@@ -247,13 +258,26 @@ export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardPr
     <article className="border-b border-gray-800 p-4 hover:bg-gray-950 transition-colors">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <Link to={`/profile/${post.author._id}`} className="flex items-center gap-3">
-          <Avatar src={post.author.avatar} name={post.author.displayName} />
+        <div className="flex items-center gap-3">
+          <Link to={`/profile/${post.author._id}`}>
+            <Avatar src={post.author.avatar} name={post.author.displayName} />
+          </Link>
           <div>
-            <p className="font-semibold hover:underline text-white">{post.author.displayName}</p>
-            <p className="text-sm text-gray-500">@{post.author.username}</p>
+            <Link to={`/profile/${post.author._id}`} className="font-semibold hover:underline text-white leading-tight">
+              {post.author.displayName}
+            </Link>
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <Link to={`/profile/${post.author._id}`} className="hover:underline truncate max-w-[120px]">
+                @{post.author.username}
+              </Link>
+              <span>·</span>
+              <Link to={`/post/${post._id}`} className="hover:underline text-gray-500">
+                {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+              </Link>
+            </div>
           </div>
-        </Link>
+        </div>
+
         <div className="relative">
           <button
             onClick={() => setShowMenu(!showMenu)}
@@ -263,6 +287,12 @@ export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardPr
           </button>
           {showMenu && (
             <div className="absolute right-0 top-10 bg-black shadow-xl rounded-xl border border-gray-700 py-1 z-10 min-w-[140px]">
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-white hover:bg-gray-900"
+              >
+                <FaLink size={12} /> {copiedLink ? 'Copied!' : 'Copy Link'}
+              </button>
               {user?._id === post.author._id ? (
                 <>
                   <button
@@ -365,7 +395,7 @@ export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardPr
       {/* Embedded Quoted Post */}
       {post.quotedPost && (
         <div className="my-3 border border-gray-800 hover:border-gray-700 rounded-2xl p-3 bg-gray-950/60 transition-colors">
-          <Link to={`/profile/${post.quotedPost.author._id}`} className="flex items-center gap-2 mb-2">
+          <Link to={`/post/${post.quotedPost._id}`} className="flex items-center gap-2 mb-2">
             <Avatar src={post.quotedPost.author.avatar} name={post.quotedPost.author.displayName} size="sm" />
             <div className="flex items-center gap-1.5 truncate">
               <span className="font-semibold text-xs text-white hover:underline truncate">
@@ -485,6 +515,18 @@ export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardPr
             </>
           )}
         </div>
+
+        {/* Views */}
+        {typeof post.viewCount === 'number' && post.viewCount > 0 && (
+          <Link
+            to={`/post/${post._id}`}
+            className="flex items-center gap-1 hover:text-blue-400 transition-colors text-xs"
+            title="Views"
+          >
+            <FaEye size={13} />
+            <span>{post.viewCount}</span>
+          </Link>
+        )}
 
         {/* Bookmark */}
         <button
