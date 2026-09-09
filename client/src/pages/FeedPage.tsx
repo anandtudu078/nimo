@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import PostCard from '../components/PostCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Avatar from '../components/Avatar'
+import PollCreator, { type PollData } from '../components/PollCreator'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { Post } from '../types'
-import { FaImage, FaTimes, FaSpinner } from 'react-icons/fa'
+import { FaImage, FaTimes, FaSpinner, FaPollH } from 'react-icons/fa'
 
 export type FeedTab = 'foryou' | 'following'
 
@@ -20,6 +21,13 @@ export default function FeedPage() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<FeedTab>('foryou')
+
+  // Poll state
+  const [showPollCreator, setShowPollCreator] = useState(false)
+  const [pollData, setPollData] = useState<PollData>({
+    options: ['', ''],
+    durationHours: 24,
+  })
 
   useEffect(() => {
     fetchPosts()
@@ -67,7 +75,14 @@ export default function FeedPage() {
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newPostContent.trim() && imageFiles.length === 0) return
+    const trimmedContent = newPostContent.trim()
+    const validPollOptions = showPollCreator
+      ? pollData.options.map((o) => o.trim()).filter(Boolean)
+      : []
+
+    if (!trimmedContent && imageFiles.length === 0 && validPollOptions.length < 2) return
+    if (showPollCreator && validPollOptions.length < 2) return
+
     setPosting(true)
     try {
       let imageUrls: string[] = []
@@ -77,14 +92,25 @@ export default function FeedPage() {
         setUploading(false)
       }
 
-      const res = await api.post('/posts', {
+      const payload: any = {
         content: newPostContent,
         images: imageUrls,
-      })
+      }
+
+      if (showPollCreator && validPollOptions.length >= 2) {
+        payload.poll = {
+          options: validPollOptions,
+          durationHours: pollData.durationHours,
+        }
+      }
+
+      const res = await api.post('/posts', payload)
       setPosts([res.data, ...posts])
       setNewPostContent('')
       setImageFiles([])
       setImagePreviews([])
+      setShowPollCreator(false)
+      setPollData({ options: ['', ''], durationHours: 24 })
     } catch (error) {
       setUploading(false)
       console.error('Failed to create post')
@@ -94,11 +120,15 @@ export default function FeedPage() {
   }
 
   const handleDeletePost = (postId: string) => {
-    setPosts(posts.filter(p => p._id !== postId))
+    setPosts(posts.filter((p) => p._id !== postId))
   }
 
   const handleEditPost = (postId: string, data: { content: string; images: string[] }) => {
-    setPosts(posts.map(p => p._id === postId ? { ...p, ...data } : p))
+    setPosts(posts.map((p) => (p._id === postId ? { ...p, ...data } : p)))
+  }
+
+  const handleQuoteCreated = (newQuotePost: Post) => {
+    setPosts([newQuotePost, ...posts])
   }
 
   return (
@@ -122,9 +152,7 @@ export default function FeedPage() {
             key={key}
             onClick={() => setTab(key)}
             className={`flex-1 py-3 text-sm font-medium transition-colors hover:bg-gray-900 ${
-              tab === key
-                ? 'text-white font-bold relative'
-                : 'text-gray-500'
+              tab === key ? 'text-white font-bold relative' : 'text-gray-500'
             }`}
           >
             {label}
@@ -148,6 +176,19 @@ export default function FeedPage() {
                 className="w-full resize-none border-none focus:outline-none text-lg placeholder-gray-500 min-h-[80px] bg-transparent text-white"
                 maxLength={280}
               />
+
+              {/* Poll Creator widget */}
+              {showPollCreator && (
+                <PollCreator
+                  pollData={pollData}
+                  onChange={(updated) => setPollData(updated)}
+                  onRemove={() => {
+                    setShowPollCreator(false)
+                    setPollData({ options: ['', ''], durationHours: 24 })
+                  }}
+                />
+              )}
+
               {imagePreviews.length > 0 && (
                 <div className={`grid gap-2 mt-2 ${imagePreviews.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                   {imagePreviews.map((img, idx) => (
@@ -167,26 +208,65 @@ export default function FeedPage() {
                   ))}
                 </div>
               )}
+
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-800">
-                <div className="flex gap-4 text-blue-500 items-center">
-                  <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple onChange={handleImageSelect} className="hidden" />
-                  <button type="button" onClick={() => fileInputRef.current?.click()} className="hover:bg-blue-500/10 p-2 rounded-full transition-colors" disabled={imageFiles.length >= 4}>
+                <div className="flex gap-2 text-blue-500 items-center">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    multiple
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="hover:bg-blue-500/10 p-2 rounded-full transition-colors"
+                    disabled={imageFiles.length >= 4}
+                    title="Add photos"
+                  >
                     <FaImage size={18} />
                   </button>
-                  <span className="text-sm text-gray-500">{imageFiles.length}/4</span>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPollCreator(!showPollCreator)}
+                    className={`p-2 rounded-full transition-colors ${
+                      showPollCreator ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-blue-500/10 text-blue-500'
+                    }`}
+                    title="Create a poll"
+                  >
+                    <FaPollH size={18} />
+                  </button>
+
+                  {imageFiles.length > 0 && (
+                    <span className="text-xs text-gray-500">{imageFiles.length}/4</span>
+                  )}
                 </div>
+
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-500">
-                    {newPostContent.length}/280
-                  </span>
+                  <span className="text-sm text-gray-500">{newPostContent.length}/280</span>
                   <button
                     type="submit"
-                    disabled={posting || uploading || (!newPostContent.trim() && imageFiles.length === 0)}
+                    disabled={
+                      posting ||
+                      uploading ||
+                      (!newPostContent.trim() &&
+                        imageFiles.length === 0 &&
+                        (!showPollCreator || pollData.options.filter((o) => o.trim()).length < 2))
+                    }
                     className="btn-primary text-sm"
                   >
                     {uploading ? (
-                      <span className="flex items-center gap-1"><FaSpinner className="animate-spin" /> Uploading...</span>
-                    ) : posting ? 'Posting...' : 'Post'}
+                      <span className="flex items-center gap-1">
+                        <FaSpinner className="animate-spin" /> Uploading...
+                      </span>
+                    ) : posting ? (
+                      'Posting...'
+                    ) : (
+                      'Post'
+                    )}
                   </button>
                 </div>
               </div>
@@ -215,7 +295,13 @@ export default function FeedPage() {
       ) : (
         <div>
           {posts.map((post) => (
-            <PostCard key={post._id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} />
+            <PostCard
+              key={post._id}
+              post={post}
+              onDelete={handleDeletePost}
+              onEdit={handleEditPost}
+              onQuote={handleQuoteCreated}
+            />
           ))}
         </div>
       )}

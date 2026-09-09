@@ -1,12 +1,26 @@
 import { Router, Response } from 'express'
 import Post from '../models/Post'
 import User from '../models/User'
+import Poll from '../models/Poll'
 import Notification from '../models/Notification'
 import { auth, AuthRequest } from '../middleware/auth'
 import Hashtag from '../models/Hashtag'
 import { spamFilter, checkContent } from '../middleware/spamFilter'
 
 const router = Router()
+
+const postPopulate = [
+  { path: 'author', select: 'username displayName avatar' },
+  { path: 'comments.author', select: 'username displayName avatar' },
+  { path: 'poll' },
+  {
+    path: 'quotedPost',
+    populate: [
+      { path: 'author', select: 'username displayName avatar' },
+      { path: 'poll' },
+    ],
+  },
+]
 
 // Helper: extract hashtags from text
 function extractHashtags(text: string): string[] {
@@ -94,25 +108,64 @@ router.get('/trending', auth, async (_req: AuthRequest, res: Response) => {
 router.get('/hashtag/:tag', auth, async (req: AuthRequest, res: Response) => {
   try {
     const tag = String(req.params.tag).toLowerCase()
-    const regex = new RegExp(`#${tag}\b`, 'i')
+    const regex = new RegExp(`#${tag}\\b`, 'i')
     const posts = await Post.find({ content: regex })
       .sort({ createdAt: -1 })
       .limit(50)
-      .populate('author', 'username displayName avatar')
-      .populate('comments.author', 'username displayName avatar')
+      .populate(postPopulate)
     res.json({ posts, tag })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to search hashtags' })
   }
 })
 
-// Create post (with spam filter)
+// Create post (with spam filter, optional poll, and optional quotedPost)
 router.post('/', auth, spamFilter, async (req: AuthRequest, res: Response) => {
   try {
-    const { content, images } = req.body
+    const { content, images, poll, quotedPostId } = req.body
     const post = new Post({ author: req.userId, content, images })
+
+    // Optional Quoted Post
+    if (quotedPostId) {
+      const quoted = await Post.findById(quotedPostId)
+      if (quoted) {
+        post.quotedPost = quoted._id as any
+        await Post.findByIdAndUpdate(quotedPostId, { $inc: { shareCount: 1 } })
+        if (quoted.author.toString() !== req.userId) {
+          await Notification.create({
+            user: quoted.author,
+            from: req.userId,
+            type: 'repost',
+            post: post._id,
+          })
+        }
+      }
+    }
+
     await post.save()
-    await post.populate('author', 'username displayName avatar')
+
+    // Optional Poll
+    if (poll && Array.isArray(poll.options) && poll.options.length >= 2) {
+      const validOptions = poll.options
+        .map((opt: string) => String(opt || '').trim())
+        .filter((opt: string) => opt.length > 0)
+        .slice(0, 6)
+
+      if (validOptions.length >= 2) {
+        const hours = Number(poll.durationHours) || 24
+        const endsAt = new Date(Date.now() + hours * 60 * 60 * 1000)
+        const pollDoc = new Poll({
+          post: post._id,
+          options: validOptions.map((text: string) => ({ text, voters: [] })),
+          endsAt,
+        })
+        await pollDoc.save()
+        post.poll = pollDoc._id as any
+        await post.save()
+      }
+    }
+
+    await post.populate(postPopulate)
 
     // Track hashtags
     const tags = extractHashtags(content || '')
@@ -125,6 +178,17 @@ router.post('/', auth, spamFilter, async (req: AuthRequest, res: Response) => {
     res.status(201).json(post)
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to create post' })
+  }
+})
+
+// Get single post by ID
+router.get('/:id', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const post = await Post.findById(req.params.id).populate(postPopulate)
+    if (!post) return res.status(404).json({ message: 'Post not found' })
+    res.json({ post })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to fetch post' })
   }
 })
 
@@ -153,8 +217,7 @@ router.get('/feed', auth, async (req: AuthRequest, res: Response) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('author', 'username displayName avatar')
-      .populate('comments.author', 'username displayName avatar')
+      .populate(postPopulate)
 
     const total = await Post.countDocuments(query)
 
@@ -169,8 +232,7 @@ router.get('/user/:userId/liked', auth, async (req: AuthRequest, res: Response) 
   try {
     const posts = await Post.find({ likes: req.params.userId })
       .sort({ createdAt: -1 })
-      .populate('author', 'username displayName avatar')
-      .populate('comments.author', 'username displayName avatar')
+      .populate(postPopulate)
 
     res.json({ posts })
   } catch (error: any) {
@@ -183,8 +245,7 @@ router.get('/user/:userId', auth, async (req: AuthRequest, res: Response) => {
   try {
     const posts = await Post.find({ author: req.params.userId })
       .sort({ createdAt: -1 })
-      .populate('author', 'username displayName avatar')
-      .populate('comments.author', 'username displayName avatar')
+      .populate(postPopulate)
 
     res.json({ posts })
   } catch (error: any) {
@@ -297,8 +358,7 @@ router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
       await createMentionNotifications(mentioned, req.userId!, post._id)
     }
 
-    await post.populate('author', 'username displayName avatar')
-    await post.populate('comments.author', 'username displayName avatar')
+    await post.populate(postPopulate)
 
     res.json(post)
   } catch (error: any) {
@@ -320,6 +380,9 @@ router.delete('/:id', auth, async (req: AuthRequest, res: Response) => {
     // Decrement hashtags
     const tags = extractHashtags(post.content)
     if (tags.length > 0) await updateHashtags(tags, -1)
+
+    // Clean up poll if attached
+    await Poll.deleteOne({ post: req.params.id })
 
     await Post.findByIdAndDelete(req.params.id)
     res.json({ message: 'Post deleted' })
@@ -355,7 +418,7 @@ router.get('/user/:userId/bookmarks', auth, async (req: AuthRequest, res: Respon
   try {
     const user = await User.findById(req.params.userId).populate({
       path: 'bookmarks',
-      populate: { path: 'author', select: 'username displayName avatar' },
+      populate: postPopulate,
     })
     if (!user) return res.status(404).json({ message: 'User not found' })
     res.json({ posts: user.bookmarks })

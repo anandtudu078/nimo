@@ -22,6 +22,8 @@ export interface IPost extends Document {
   reactionCounts: Map<string, number>
   shareCount: number
   viewCount: number
+  poll?: mongoose.Types.ObjectId
+  quotedPost?: mongoose.Types.ObjectId
   createdAt: Date
   updatedAt: Date
 }
@@ -53,6 +55,8 @@ const postSchema = new Schema<IPost>(
     },
     shareCount: { type: Number, default: 0 },
     viewCount: { type: Number, default: 0 },
+    poll: { type: Schema.Types.ObjectId, ref: 'Poll' },
+    quotedPost: { type: Schema.Types.ObjectId, ref: 'Post' },
   },
   { timestamps: true }
 )
