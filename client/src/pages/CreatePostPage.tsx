@@ -2,7 +2,8 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
-import { FaImage, FaTimes, FaArrowLeft, FaSpinner } from 'react-icons/fa'
+import PollCreator, { type PollData } from '../components/PollCreator'
+import { FaImage, FaTimes, FaArrowLeft, FaSpinner, FaPollH } from 'react-icons/fa'
 
 export default function CreatePostPage() {
   const { user } = useAuth()
@@ -14,6 +15,13 @@ export default function CreatePostPage() {
   const [posting, setPosting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+
+  // Poll state
+  const [showPollCreator, setShowPollCreator] = useState(false)
+  const [pollData, setPollData] = useState<PollData>({
+    options: ['', ''],
+    durationHours: 24,
+  })
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -66,8 +74,18 @@ export default function CreatePostPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!content.trim() && imageFiles.length === 0) {
-      setError('Please add some content or images')
+    const trimmedContent = content.trim()
+    const validPollOptions = showPollCreator
+      ? pollData.options.map((o) => o.trim()).filter(Boolean)
+      : []
+
+    if (!trimmedContent && imageFiles.length === 0 && validPollOptions.length < 2) {
+      setError('Please add some content, images, or a valid poll')
+      return
+    }
+
+    if (showPollCreator && validPollOptions.length < 2) {
+      setError('Polls must have at least 2 options')
       return
     }
 
@@ -81,10 +99,19 @@ export default function CreatePostPage() {
         setUploading(false)
       }
 
-      await api.post('/posts', {
+      const payload: any = {
         content,
         images: imageUrls,
-      })
+      }
+
+      if (showPollCreator && validPollOptions.length >= 2) {
+        payload.poll = {
+          options: validPollOptions,
+          durationHours: pollData.durationHours,
+        }
+      }
+
+      await api.post('/posts', payload)
       navigate('/feed')
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create post')
@@ -122,10 +149,24 @@ export default function CreatePostPage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="What's happening?"
-                className="w-full resize-none border-none focus:outline-none text-lg placeholder-gray-500 min-h-[200px] bg-transparent text-white"
+                className="w-full resize-none border-none focus:outline-none text-lg placeholder-gray-500 min-h-[140px] bg-transparent text-white"
                 maxLength={280}
                 autoFocus
               />
+
+              {/* Poll Creator */}
+              {showPollCreator && (
+                <div className="mb-4">
+                  <PollCreator
+                    pollData={pollData}
+                    onChange={(updated) => setPollData(updated)}
+                    onRemove={() => {
+                      setShowPollCreator(false)
+                      setPollData({ options: ['', ''], durationHours: 24 })
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Image Preview Grid */}
               {imagePreviews.length > 0 && (
@@ -159,7 +200,7 @@ export default function CreatePostPage() {
 
           {/* Footer */}
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-800">
-            <div className="flex gap-4 text-blue-500">
+            <div className="flex gap-2 text-blue-500 items-center">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -169,9 +210,23 @@ export default function CreatePostPage() {
               >
                 <FaImage size={20} />
               </button>
-              <span className="text-sm text-gray-500 self-center">
-                {imageFiles.length}/4 images
-              </span>
+
+              <button
+                type="button"
+                onClick={() => setShowPollCreator(!showPollCreator)}
+                className={`p-2 rounded-full transition-colors ${
+                  showPollCreator ? 'bg-blue-500/20 text-blue-400' : 'hover:bg-blue-500/10 text-blue-500'
+                }`}
+                title="Create a poll"
+              >
+                <FaPollH size={20} />
+              </button>
+
+              {imageFiles.length > 0 && (
+                <span className="text-sm text-gray-500 self-center">
+                  {imageFiles.length}/4 images
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-500">
@@ -179,7 +234,13 @@ export default function CreatePostPage() {
               </span>
               <button
                 type="submit"
-                disabled={posting || uploading || (!content.trim() && imageFiles.length === 0)}
+                disabled={
+                  posting ||
+                  uploading ||
+                  (!content.trim() &&
+                    imageFiles.length === 0 &&
+                    (!showPollCreator || pollData.options.filter((o) => o.trim()).length < 2))
+                }
                 className="btn-primary"
               >
                 {uploading ? (

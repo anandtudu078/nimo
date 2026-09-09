@@ -24,6 +24,21 @@ export interface Comment {
   createdAt: string
 }
 
+export interface PollOption {
+  text: string
+  voters: string[]
+}
+
+export interface Poll {
+  _id: string
+  post: string
+  options: PollOption[]
+  endsAt: string
+  totalVotes: number
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Post {
   _id: string
   author: {
@@ -36,6 +51,9 @@ export interface Post {
   images: string[]
   likes: string[]
   comments: Comment[]
+  poll?: Poll
+  quotedPost?: Post
+  shareCount?: number
   createdAt: string
 }
 

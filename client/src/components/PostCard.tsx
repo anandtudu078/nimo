@@ -1,17 +1,31 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { FaHeart, FaComment, FaShare, FaBookmark, FaEllipsisH, FaEdit, FaTrash, FaFlag, FaSmile } from 'react-icons/fa'
+import {
+  FaHeart,
+  FaComment,
+  FaBookmark,
+  FaEllipsisH,
+  FaEdit,
+  FaTrash,
+  FaFlag,
+  FaSmile,
+  FaRetweet,
+  FaQuoteRight,
+} from 'react-icons/fa'
 import ReportModal from './ReportModal'
+import PollCard from './PollCard'
+import QuoteModal from './QuoteModal'
 import { formatDistanceToNow } from 'date-fns'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import Avatar from './Avatar'
-import type { Post } from '../types'
+import type { Post, Poll } from '../types'
 
 interface PostCardProps {
   post: Post
   onDelete?: (id: string) => void
   onEdit?: (id: string, data: { content: string; images: string[] }) => void
+  onQuote?: (post: Post) => void
 }
 
 // Must match VALID_EMOJIS in server/src/routes/reactions.ts
@@ -21,7 +35,6 @@ const REACTION_EMOJIS = ['❤️', '🔥', '😂', '😮', '😢', '👍']
 const mentionCache = new Map<string, string>()
 
 // Renders post/comment text with clickable #hashtags and @mentions.
-// Mentions are resolved to profile links via /users/username/:username.
 function RichText({ content }: { content: string }) {
   const [mentions, setMentions] = useState<Record<string, string>>({})
 
@@ -73,7 +86,7 @@ function RichText({ content }: { content: string }) {
   )
 }
 
-export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
+export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardProps) {
   const { user } = useAuth()
   const [liked, setLiked] = useState(post.likes.includes(user?._id || ''))
   const [likeCount, setLikeCount] = useState(post.likes.length)
@@ -91,11 +104,36 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
   const [userReaction, setUserReaction] = useState<string | null>(null)
   const [showReactionPicker, setShowReactionPicker] = useState(false)
 
+  // Poll state
+  const [poll, setPoll] = useState<Poll | undefined>(post.poll)
+
+  // Repost / Quote state
+  const [reposted, setReposted] = useState(false)
+  const [shareCount, setShareCount] = useState(post.shareCount || 0)
+  const [showRepostMenu, setShowRepostMenu] = useState(false)
+  const [showQuoteModal, setShowQuoteModal] = useState(false)
+
+  // Check repost status on mount
+  useEffect(() => {
+    let mounted = true
+    if (user?._id && post._id) {
+      api
+        .get(`/reposts/check/${post._id}`)
+        .then((res) => {
+          if (mounted) setReposted(res.data.reposted)
+        })
+        .catch(() => {})
+    }
+    return () => {
+      mounted = false
+    }
+  }, [post._id, user?._id])
+
   const handleLike = async () => {
     try {
       await api.post(`/posts/${post._id}/like`)
       setLiked(!liked)
-      setLikeCount(prev => liked ? prev - 1 : prev + 1)
+      setLikeCount((prev) => (liked ? prev - 1 : prev + 1))
     } catch (error) {
       console.error('Failed to like post')
     }
@@ -154,7 +192,19 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
     }
   }
 
-  // Load reaction counts and the current user's own reaction
+  // Toggle Repost
+  const handleToggleRepost = async () => {
+    setShowRepostMenu(false)
+    try {
+      const res = await api.post(`/reposts/${post._id}`)
+      setReposted(res.data.reposted)
+      setShareCount(res.data.shareCount)
+    } catch (error) {
+      console.error('Failed to toggle repost')
+    }
+  }
+
+  // Load reaction counts and user reaction
   useEffect(() => {
     let mounted = true
     api
@@ -205,22 +255,37 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
           </div>
         </Link>
         <div className="relative">
-          <button onClick={() => setShowMenu(!showMenu)} className="text-gray-500 hover:text-gray-300 p-2 rounded-full hover:bg-gray-800">
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="text-gray-500 hover:text-gray-300 p-2 rounded-full hover:bg-gray-800"
+          >
             <FaEllipsisH />
           </button>
           {showMenu && (
             <div className="absolute right-0 top-10 bg-black shadow-xl rounded-xl border border-gray-700 py-1 z-10 min-w-[140px]">
               {user?._id === post.author._id ? (
                 <>
-                  <button onClick={handleEdit} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-white hover:bg-gray-900">
+                  <button
+                    onClick={handleEdit}
+                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-white hover:bg-gray-900"
+                  >
                     <FaEdit /> Edit
                   </button>
-                  <button onClick={handleDelete} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-gray-900">
+                  <button
+                    onClick={handleDelete}
+                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-gray-900"
+                  >
                     <FaTrash /> Delete
                   </button>
                 </>
               ) : (
-                <button onClick={() => { setShowReport(true); setShowMenu(false) }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-gray-900">
+                <button
+                  onClick={() => {
+                    setShowReport(true)
+                    setShowMenu(false)
+                  }}
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-500 hover:bg-gray-900"
+                >
                   <FaFlag /> Report
                 </button>
               )}
@@ -242,7 +307,10 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
           <div className="flex items-center justify-between mt-2">
             <span className="text-sm text-gray-500">{editContent.length}/280</span>
             <div className="flex gap-2">
-              <button onClick={handleCancelEdit} className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors">
+              <button
+                onClick={handleCancelEdit}
+                className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+              >
                 Cancel
               </button>
               <button
@@ -256,11 +324,22 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
           </div>
         </div>
       ) : (
-        <p className="mb-3 whitespace-pre-wrap text-white">{post.content && <RichText content={post.content} />}</p>
+        <p className="mb-3 whitespace-pre-wrap text-white">
+          {post.content && <RichText content={post.content} />}
+        </p>
+      )}
+
+      {/* Poll */}
+      {poll && (
+        <PollCard
+          poll={poll}
+          postId={post._id}
+          onVote={(updatedPoll) => setPoll(updatedPoll)}
+        />
       )}
 
       {/* Image Carousel */}
-      {post.images.length > 0 && (
+      {post.images && post.images.length > 0 && (
         <div className="relative mb-3">
           <img
             src={post.images[currentImageIndex]}
@@ -283,20 +362,66 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
         </div>
       )}
 
+      {/* Embedded Quoted Post */}
+      {post.quotedPost && (
+        <div className="my-3 border border-gray-800 hover:border-gray-700 rounded-2xl p-3 bg-gray-950/60 transition-colors">
+          <Link to={`/profile/${post.quotedPost.author._id}`} className="flex items-center gap-2 mb-2">
+            <Avatar src={post.quotedPost.author.avatar} name={post.quotedPost.author.displayName} size="sm" />
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="font-semibold text-xs text-white hover:underline truncate">
+                {post.quotedPost.author.displayName}
+              </span>
+              <span className="text-xs text-gray-500 truncate">@{post.quotedPost.author.username}</span>
+            </div>
+          </Link>
+          {post.quotedPost.content && (
+            <p className="text-sm text-gray-200 mb-2 whitespace-pre-wrap">
+              <RichText content={post.quotedPost.content} />
+            </p>
+          )}
+          {post.quotedPost.poll && (
+            <PollCard
+              poll={post.quotedPost.poll}
+              postId={post.quotedPost._id}
+            />
+          )}
+          {post.quotedPost.images && post.quotedPost.images.length > 0 && (
+            <div className="rounded-xl overflow-hidden max-h-48 border border-gray-800/80">
+              <img src={post.quotedPost.images[0]} alt="" className="w-full h-48 object-cover" />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex items-center gap-6 text-gray-500 mt-1">
-        <button onClick={handleLike} className={`flex items-center gap-1.5 hover:text-red-500 transition-colors ${liked ? 'text-red-500' : ''}`}>
+        {/* Like */}
+        <button
+          onClick={handleLike}
+          className={`flex items-center gap-1.5 hover:text-red-500 transition-colors ${
+            liked ? 'text-red-500' : ''
+          }`}
+        >
           <FaHeart fill={liked ? 'currentColor' : 'none'} />
           <span>{likeCount}</span>
         </button>
-        <button onClick={() => setShowComments(!showComments)} className="flex items-center gap-1.5 hover:text-blue-500 transition-colors">
+
+        {/* Comment */}
+        <button
+          onClick={() => setShowComments(!showComments)}
+          className="flex items-center gap-1.5 hover:text-blue-500 transition-colors"
+        >
           <FaComment />
           <span>{comments.length}</span>
         </button>
+
+        {/* Emoji Reactions */}
         <div className="relative">
           <button
             onClick={() => setShowReactionPicker(!showReactionPicker)}
-            className={`flex items-center gap-1.5 hover:text-pink-500 transition-colors ${userReaction ? 'text-pink-500' : ''}`}
+            className={`flex items-center gap-1.5 hover:text-pink-500 transition-colors ${
+              userReaction ? 'text-pink-500' : ''
+            }`}
             title="React"
           >
             {userReaction ? <span className="text-base leading-none">{userReaction}</span> : <FaSmile />}
@@ -309,7 +434,9 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
                   <button
                     key={emoji}
                     onClick={() => handleReact(emoji)}
-                    className={`text-2xl hover:scale-125 transition-transform ${userReaction === emoji ? 'scale-110' : ''}`}
+                    className={`text-2xl hover:scale-125 transition-transform ${
+                      userReaction === emoji ? 'scale-110' : ''
+                    }`}
                     title={emoji}
                   >
                     {emoji}
@@ -319,17 +446,60 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
             </>
           )}
         </div>
-        <button className="flex items-center gap-1.5 hover:text-green-500 transition-colors">
-          <FaShare />
-        </button>
-        <button onClick={handleBookmark} className={`flex items-center gap-1.5 hover:text-blue-500 transition-colors ml-auto ${bookmarked ? 'text-blue-500' : ''}`}>
+
+        {/* Repost / Quote Menu Button */}
+        <div className="relative">
+          <button
+            onClick={() => setShowRepostMenu(!showRepostMenu)}
+            className={`flex items-center gap-1.5 hover:text-green-500 transition-colors ${
+              reposted ? 'text-green-500 font-medium' : ''
+            }`}
+            title="Repost or Quote"
+          >
+            <FaRetweet size={15} />
+            <span>{shareCount > 0 ? shareCount : ''}</span>
+          </button>
+
+          {showRepostMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowRepostMenu(false)} />
+              <div className="absolute bottom-9 left-0 z-20 bg-black border border-gray-700 rounded-xl shadow-2xl py-1 min-w-[140px] text-xs font-semibold">
+                <button
+                  onClick={handleToggleRepost}
+                  className="w-full flex items-center gap-2 px-3.5 py-2 hover:bg-gray-900 text-white hover:text-green-400 transition-colors"
+                >
+                  <FaRetweet size={13} className={reposted ? 'text-green-500' : ''} />
+                  <span>{reposted ? 'Undo Repost' : 'Repost'}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowRepostMenu(false)
+                    setShowQuoteModal(true)
+                  }}
+                  className="w-full flex items-center gap-2 px-3.5 py-2 hover:bg-gray-900 text-white hover:text-blue-400 transition-colors border-t border-gray-800"
+                >
+                  <FaQuoteRight size={11} />
+                  <span>Quote Post</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Bookmark */}
+        <button
+          onClick={handleBookmark}
+          className={`flex items-center gap-1.5 hover:text-blue-500 transition-colors ml-auto ${
+            bookmarked ? 'text-blue-500' : ''
+          }`}
+        >
           <FaBookmark fill={bookmarked ? 'currentColor' : 'none'} />
         </button>
       </div>
 
       {/* Reaction Counts */}
       {Object.keys(reactionCounts).length > 0 && (
-        <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+        <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
           {Object.entries(reactionCounts)
             .filter(([, count]) => count > 0)
             .map(([emoji, count]) => (
@@ -350,7 +520,9 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
               <div className="flex-1">
                 <div className="bg-gray-900 rounded-2xl px-3 py-2">
                   <span className="font-semibold text-sm text-white">{comment.author.displayName}</span>
-                  <p className="text-sm text-gray-300"><RichText content={comment.content} /></p>
+                  <p className="text-sm text-gray-300">
+                    <RichText content={comment.content} />
+                  </p>
                 </div>
                 <p className="text-xs text-gray-600 mt-1 ml-3">
                   {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
@@ -372,6 +544,20 @@ export default function PostCard({ post, onDelete, onEdit }: PostCardProps) {
           </form>
         </div>
       )}
+
+      {/* Quote Modal */}
+      {showQuoteModal && (
+        <QuoteModal
+          targetPost={post}
+          onClose={() => setShowQuoteModal(false)}
+          onSuccess={(createdQuote) => {
+            setShareCount((prev) => prev + 1)
+            onQuote?.(createdQuote)
+          }}
+        />
+      )}
+
+      {/* Report Modal */}
       {showReport && (
         <ReportModal targetType="post" targetId={post._id} onClose={() => setShowReport(false)} />
       )}
