@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import mongoose from 'mongoose'
 import Post from '../models/Post'
 import User from '../models/User'
 import Poll from '../models/Poll'
@@ -108,7 +109,9 @@ router.get('/trending', auth, async (_req: AuthRequest, res: Response) => {
 router.get('/hashtag/:tag', auth, async (req: AuthRequest, res: Response) => {
   try {
     const tag = String(req.params.tag).toLowerCase()
-    const regex = new RegExp(`#${tag}\\b`, 'i')
+    // Escape regex metacharacters so tags like "c++" can't break (or inject into) the query
+    const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(`#${escapedTag}\\b`, 'i')
     const posts = await Post.find({ content: regex })
       .sort({ createdAt: -1 })
       .limit(50)
@@ -123,6 +126,25 @@ router.get('/hashtag/:tag', auth, async (req: AuthRequest, res: Response) => {
 router.post('/', auth, spamFilter, async (req: AuthRequest, res: Response) => {
   try {
     const { content, images, poll, quotedPostId } = req.body
+
+    // A post must have text or images — polls alone aren't meaningful content
+    const hasText = typeof content === 'string' && content.trim().length > 0
+    const hasImages = Array.isArray(images) && images.length > 0
+    if (!hasText && !hasImages) {
+      return res.status(400).json({ message: 'Post must include text or images' })
+    }
+
+    // Validate types/lengths before persisting (schema maxlength doesn't reject — it truncates)
+    if (hasText && content.length > 280) {
+      return res.status(400).json({ message: 'Post content must be 280 characters or fewer' })
+    }
+    if (hasImages && (images.length > 4 || images.some((i: any) => typeof i !== 'string' || i.length > 2048))) {
+      return res.status(400).json({ message: 'Invalid images payload' })
+    }
+    if (quotedPostId !== undefined && !mongoose.isValidObjectId(quotedPostId)) {
+      return res.status(400).json({ message: 'Invalid quotedPostId' })
+    }
+
     const post = new Post({ author: req.userId, content, images })
 
     // Optional Quoted Post
@@ -181,18 +203,8 @@ router.post('/', auth, spamFilter, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Get single post by ID
-router.get('/:id', auth, async (req: AuthRequest, res: Response) => {
-  try {
-    const post = await Post.findById(req.params.id).populate(postPopulate)
-    if (!post) return res.status(404).json({ message: 'Post not found' })
-    res.json({ post })
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || 'Failed to fetch post' })
-  }
-})
-
 // Get feed — tab=following (posts from people you follow + your own) or tab=foryou (default, all posts)
+// NOTE: must be declared before GET /:id, otherwise "feed" is captured as an :id param.
 router.get('/feed', auth, async (req: AuthRequest, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1
@@ -224,6 +236,21 @@ router.get('/feed', auth, async (req: AuthRequest, res: Response) => {
     res.json({ posts, total, page, pages: Math.ceil(total / limit), tab })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to fetch posts' })
+  }
+})
+
+// Get single post by ID
+router.get('/:id', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    // Reject non-ObjectId params early ("feed", "trending", garbage) instead of a 500 CastError
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ message: 'Post not found' })
+    }
+    const post = await Post.findById(req.params.id).populate(postPopulate)
+    if (!post) return res.status(404).json({ message: 'Post not found' })
+    res.json({ post })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to fetch post' })
   }
 })
 
@@ -261,7 +288,8 @@ router.post('/:id/like', auth, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Post not found' })
     }
 
-    const index = post.likes.indexOf(req.userId as any)
+    // ObjectId arrays must be compared as strings — indexOf against a raw string always misses
+    const index = post.likes.findIndex((id) => id.toString() === req.userId)
     if (index === -1) {
       post.likes.push(req.userId as any)
       // Create notification
@@ -348,8 +376,8 @@ router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
     if (addedTags.length > 0) await updateHashtags(addedTags, 1)
 
     // Notify only newly mentioned users (edits don't re-ping existing mentions)
-    const newMentions = extractMentions(post.content)
-    const addedMentions = newMentions.filter((m) => !oldMentions.includes(m))
+    const currentMentions = extractMentions(post.content)
+    const addedMentions = currentMentions.filter((m) => !oldMentions.includes(m))
     if (addedMentions.length > 0) {
       const mentioned = await User.find({
         $or: addedMentions.map((u) => ({ username: exactCaseInsensitive(u) })),
@@ -398,7 +426,7 @@ router.post('/:id/bookmark', auth, async (req: AuthRequest, res: Response) => {
     if (!user) return res.status(404).json({ message: 'User not found' })
 
     const postId = req.params.id
-    const isBookmarked = user.bookmarks.includes(postId as any)
+    const isBookmarked = user.bookmarks.some((id) => id.toString() === postId)
 
     if (isBookmarked) {
       user.bookmarks = user.bookmarks.filter((id) => id.toString() !== postId)
@@ -416,6 +444,10 @@ router.post('/:id/bookmark', auth, async (req: AuthRequest, res: Response) => {
 // Get user's bookmarked posts
 router.get('/user/:userId/bookmarks', auth, async (req: AuthRequest, res: Response) => {
   try {
+    // Bookmarks are private — only the owner can list them
+    if (req.params.userId !== req.userId) {
+      return res.status(403).json({ message: 'Not authorized' })
+    }
     const user = await User.findById(req.params.userId).populate({
       path: 'bookmarks',
       populate: postPopulate,

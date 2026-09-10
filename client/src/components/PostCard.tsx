@@ -112,6 +112,7 @@ export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardPr
 
   // Repost / Quote state
   const [reposted, setReposted] = useState(false)
+  const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [shareCount, setShareCount] = useState(post.shareCount || 0)
   const [showRepostMenu, setShowRepostMenu] = useState(false)
   const [showQuoteModal, setShowQuoteModal] = useState(false)
@@ -187,11 +188,15 @@ export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardPr
   }
 
   const handleBookmark = async () => {
+    if (bookmarkLoading) return
+    setBookmarkLoading(true)
     try {
       const res = await api.post(`/posts/${post._id}/bookmark`)
       setBookmarked(res.data.bookmarked)
     } catch (error) {
       console.error('Failed to toggle bookmark')
+    } finally {
+      setBookmarkLoading(false)
     }
   }
 
@@ -531,6 +536,7 @@ export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardPr
         {/* Bookmark */}
         <button
           onClick={handleBookmark}
+          disabled={bookmarkLoading}
           className={`flex items-center gap-1.5 hover:text-blue-500 transition-colors ml-auto ${
             bookmarked ? 'text-blue-500' : ''
           }`}

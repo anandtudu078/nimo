@@ -1,6 +1,8 @@
 import { Router, Response } from 'express'
+import mongoose from 'mongoose'
 import Report from '../models/Report'
 import { auth, AuthRequest } from '../middleware/auth'
+import { adminAuth } from '../middleware/adminAuth'
 
 const router = Router()
 
@@ -15,6 +17,11 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
 
     if (!['post', 'user'].includes(targetType)) {
       return res.status(400).json({ message: 'targetType must be post or user' })
+    }
+
+    // targetId must be a valid ObjectId — garbage would poison future admin lookups
+    if (!mongoose.isValidObjectId(targetId)) {
+      return res.status(400).json({ message: 'Invalid targetId' })
     }
 
     // Check for duplicate report
@@ -42,8 +49,8 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Get all reports (admin)
-router.get('/', auth, async (req: AuthRequest, res: Response) => {
+// Get all reports (admin only)
+router.get('/', auth, adminAuth, async (_req: AuthRequest, res: Response) => {
   try {
     const reports = await Report.find()
       .sort({ createdAt: -1 })
@@ -54,8 +61,8 @@ router.get('/', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Update report status (admin)
-router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
+// Update report status (admin only)
+router.put('/:id', auth, adminAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { status } = req.body
     if (!['pending', 'reviewed', 'resolved'].includes(status)) {

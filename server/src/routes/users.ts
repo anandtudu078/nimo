@@ -247,8 +247,12 @@ router.get('/username/:username', auth, async (req: AuthRequest, res: Response) 
 // Get user profile (with pinned post populated)
 router.get('/:userId', auth, async (req: AuthRequest, res: Response) => {
   try {
+    // Explicit public allowlist — a denylist ('-password') previously leaked
+    // email, push tokens, bookmarks, and mute/block lists of ANY user.
+    const publicFields =
+      'username displayName avatar bio website profileBanner studyYear isVerified followers following pinnedPost createdAt'
     const user = await User.findById(req.params.userId)
-      .select('-password')
+      .select(publicFields)
       .populate({
         path: 'pinnedPost',
         populate: { path: 'author', select: 'username displayName avatar' },
@@ -272,7 +276,8 @@ router.post('/:userId/block', auth, async (req: AuthRequest, res: Response) => {
     const user = await User.findById(req.userId)
     if (!user) return res.status(404).json({ message: 'User not found' })
 
-    const isBlocked = user.blockedUsers.includes(req.params.userId as any)
+    // ObjectId arrays must be compared as strings — includes() against a raw string always misses
+    const isBlocked = user.blockedUsers.some((id) => id.toString() === req.params.userId)
 
     if (isBlocked) {
       user.blockedUsers = user.blockedUsers.filter(
@@ -280,12 +285,13 @@ router.post('/:userId/block', auth, async (req: AuthRequest, res: Response) => {
       )
     } else {
       user.blockedUsers.push(req.params.userId as any)
-      // Also unfollow if following
+      // Also unfollow in both directions (blocker stops following target…)
       user.following = user.following.filter(
         (id) => id.toString() !== req.params.userId
       )
+      // …and remove the blocker from the target's follower list too
       await User.findByIdAndUpdate(req.params.userId, {
-        $pull: { followers: req.userId, following: req.userId },
+        $pull: { followers: req.userId },
       })
     }
     await user.save()

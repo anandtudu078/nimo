@@ -4,6 +4,10 @@ import EmailVerification from '../models/EmailVerification'
 import User from '../models/User'
 import { auth, AuthRequest } from '../middleware/auth'
 
+// Store only a hash of verification tokens — a DB leak alone must not yield
+// a usable verification token.
+const hashToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex')
+
 const router = Router()
 
 // Send verification email
@@ -25,7 +29,7 @@ router.post('/send', auth, async (req: AuthRequest, res: Response) => {
 
     await EmailVerification.create({
       user: req.userId,
-      token,
+      token: hashToken(token),
       expiresAt,
     })
 
@@ -47,7 +51,7 @@ router.post('/verify', async (req: AuthRequest, res: Response) => {
     if (!token) return res.status(400).json({ message: 'Token is required' })
 
     const verification = await EmailVerification.findOne({
-      token,
+      token: hashToken(token),
       verified: false,
       expiresAt: { $gt: new Date() },
     })

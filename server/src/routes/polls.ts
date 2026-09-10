@@ -36,6 +36,10 @@ router.post('/:postId', auth, async (req: AuthRequest, res: Response) => {
     })
     await poll.save()
 
+    // Link the poll to its post — otherwise it's unreachable from post queries
+    post.poll = poll._id as any
+    await post.save()
+
     res.status(201).json({ poll })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to create poll' })

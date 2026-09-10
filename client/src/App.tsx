@@ -54,6 +54,8 @@ export default function App() {
             <Route path="/hashtag/:tag" element={<HashtagPage />} />
             <Route path="/post/:id" element={<PostDetailPage />} />
           </Route>
+          {/* Catch-all: send unknown URLs somewhere sensible instead of a blank page */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
     </AuthProvider>
