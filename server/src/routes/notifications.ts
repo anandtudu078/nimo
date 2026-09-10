@@ -19,10 +19,16 @@ router.get('/', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Mark notification as read
+// Mark notification as read (only the owner's notification)
 router.put('/:id/read', auth, async (req: AuthRequest, res: Response) => {
   try {
-    await Notification.findByIdAndUpdate(req.params.id, { read: true })
+    const result = await Notification.findOneAndUpdate(
+      { _id: req.params.id, user: req.userId },
+      { read: true }
+    )
+    if (!result) {
+      return res.status(404).json({ message: 'Notification not found' })
+    }
     res.json({ message: 'Notification marked as read' })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to mark notification as read' })

@@ -33,6 +33,50 @@ router.post('/:postId', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
+// Get user's overall analytics
+// NOTE: must be declared before GET /:postId/analytics, otherwise "user" is captured as a :postId param.
+router.get('/user/analytics', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId
+
+    // Total views across all posts
+    const totalViews = await View.aggregate([
+      {
+        $lookup: {
+          from: 'posts',
+          localField: 'post',
+          foreignField: '_id',
+          as: 'postData',
+        },
+      },
+      { $unwind: '$postData' },
+      { $match: { 'postData.author': userId } },
+      { $count: 'total' },
+    ])
+
+    // Total likes across all posts
+    const posts = await Post.find({ author: userId }).select('likes viewCount')
+    const totalLikes = posts.reduce((sum, p) => sum + p.likes.length, 0)
+    const totalPostViews = posts.reduce((sum, p) => sum + (p.viewCount || 0), 0)
+
+    // Top performing posts
+    const topPosts = await Post.find({ author: userId })
+      .sort({ viewCount: -1 })
+      .limit(5)
+      .select('content viewCount likes comments createdAt')
+      .populate('author', 'username displayName avatar')
+
+    res.json({
+      totalViews: totalPostViews,
+      totalLikes,
+      totalPosts: posts.length,
+      topPosts,
+    })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to get user analytics' })
+  }
+})
+
 // Get post analytics (for post author)
 router.get('/:postId/analytics', auth, async (req: AuthRequest, res: Response) => {
   try {
@@ -77,49 +121,6 @@ router.get('/:postId/analytics', auth, async (req: AuthRequest, res: Response) =
     })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to get analytics' })
-  }
-})
-
-// Get user's overall analytics
-router.get('/user/analytics', auth, async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.userId
-
-    // Total views across all posts
-    const totalViews = await View.aggregate([
-      {
-        $lookup: {
-          from: 'posts',
-          localField: 'post',
-          foreignField: '_id',
-          as: 'postData',
-        },
-      },
-      { $unwind: '$postData' },
-      { $match: { 'postData.author': userId } },
-      { $count: 'total' },
-    ])
-
-    // Total likes across all posts
-    const posts = await Post.find({ author: userId }).select('likes viewCount')
-    const totalLikes = posts.reduce((sum, p) => sum + p.likes.length, 0)
-    const totalPostViews = posts.reduce((sum, p) => sum + (p.viewCount || 0), 0)
-
-    // Top performing posts
-    const topPosts = await Post.find({ author: userId })
-      .sort({ viewCount: -1 })
-      .limit(5)
-      .select('content viewCount likes comments createdAt')
-      .populate('author', 'username displayName avatar')
-
-    res.json({
-      totalViews: totalPostViews,
-      totalLikes,
-      totalPosts: posts.length,
-      topPosts,
-    })
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || 'Failed to get user analytics' })
   }
 })
 

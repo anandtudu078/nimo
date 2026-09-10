@@ -1,12 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
-import jwt from 'jsonwebtoken'
 import User from '../models/User'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
-
-if (!process.env.JWT_SECRET) {
-  console.warn('⚠️  WARNING: JWT_SECRET not set! Using insecure default. Set JWT_SECRET in your environment variables.')
-}
+import { signToken, verifyToken } from '../config/jwt'
 
 export interface AuthRequest extends Request {
   userId?: string
@@ -19,7 +13,10 @@ export const auth = async (req: AuthRequest, res: Response, next: NextFunction) 
       return res.status(401).json({ message: 'No token provided' })
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
+    const decoded = verifyToken(token)
+    if (!decoded) {
+      return res.status(401).json({ message: 'Invalid token' })
+    }
     const user = await User.findById(decoded.userId)
     if (!user) {
       return res.status(401).json({ message: 'User not found' })
@@ -33,5 +30,5 @@ export const auth = async (req: AuthRequest, res: Response, next: NextFunction) 
 }
 
 export const generateToken = (userId: string): string => {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' })
+  return signToken({ userId })
 }

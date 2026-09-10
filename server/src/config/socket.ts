@@ -1,8 +1,6 @@
 import { Server as HttpServer } from 'http'
 import { Server, Socket } from 'socket.io'
-import jwt from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
+import { verifyToken } from './jwt'
 
 interface AuthenticatedSocket extends Socket {
   userId?: string
@@ -16,9 +14,18 @@ export function setupSocketIO(httpServer: HttpServer): Server {
           .split(',')
           .map((o: string) => o.trim().replace(/\/$/, ''))
 
-        // Allow Vercel preview deployments
-        if (!origin || allowedOrigins.includes(origin) ||
-          (origin.endsWith('.vercel.app') && origin.includes('nimo'))) {
+        // Allow Vercel preview deployments (strict pattern, must match app.ts:
+        // hostnames like nimo-*.vercel.app — not any *.vercel.app containing "nimo")
+        const vercelPreviewOk = (() => {
+          try {
+            if (!origin) return false
+            const url = new URL(origin)
+            return url.hostname.endsWith('.vercel.app') && url.hostname.startsWith('nimo-')
+          } catch {
+            return false
+          }
+        })()
+        if (!origin || allowedOrigins.includes(origin) || vercelPreviewOk) {
           callback(null, true)
         } else {
           callback(new Error('Socket.IO CORS not allowed'))
@@ -35,13 +42,12 @@ export function setupSocketIO(httpServer: HttpServer): Server {
       return next(new Error('Authentication required'))
     }
 
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
-      socket.userId = decoded.userId
-      next()
-    } catch {
-      next(new Error('Invalid token'))
+    const decoded = verifyToken(token)
+    if (!decoded) {
+      return next(new Error('Invalid token'))
     }
+    socket.userId = decoded.userId
+    next()
   })
 
   io.on('connection', (socket: AuthenticatedSocket) => {

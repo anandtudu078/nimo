@@ -12,10 +12,17 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Only hard-redirect on 401s for authenticated API calls: login/register/reset
+// requests legitimately return 401/400, and redirecting on those bounces the
+// user to /login while they're already there (or erases a password-reset flow).
+const UNAUTH_PATHS = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password']
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    const url: string = error.config?.url || ''
+    if (status === 401 && !UNAUTH_PATHS.some((p) => url.includes(p))) {
       localStorage.removeItem('token')
       window.location.href = '/login'
     }

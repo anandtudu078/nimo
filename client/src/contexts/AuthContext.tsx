@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import api from '../services/api'
+import { resetSharedSocket } from '../hooks/useSocket'
 import type { User } from '../types'
 
 interface AuthContextType {
@@ -44,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem('token')
+    resetSharedSocket()
     setUser(null)
   }
 

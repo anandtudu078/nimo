@@ -18,6 +18,19 @@ async function requireConnection(a: string | undefined, b: string): Promise<bool
   return !!connection
 }
 
+// Guard: the requester must be a participant of the conversation (IDOR protection)
+async function getConversationForUser(
+  conversationId: string | string[],
+  userId: string | undefined
+) {
+  const conversation = await Conversation.findById(String(conversationId))
+  if (!conversation) return null
+  const isParticipant = conversation.participants.some(
+    (p: any) => p.toString() === userId
+  )
+  return isParticipant ? conversation : null
+}
+
 // Get all conversations
 router.get('/conversations', auth, async (req: AuthRequest, res: Response) => {
   try {
@@ -107,6 +120,11 @@ router.post('/conversation/:userId', auth, async (req: AuthRequest, res: Respons
 // Get messages in a conversation
 router.get('/:conversationId', auth, async (req: AuthRequest, res: Response) => {
   try {
+    const conversation = await getConversationForUser(req.params.conversationId, req.userId)
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' })
+    }
+
     const messages = await Message.find({ conversation: req.params.conversationId })
       .sort({ createdAt: 1 })
       .populate('sender', 'username displayName')
@@ -121,6 +139,11 @@ router.get('/:conversationId', auth, async (req: AuthRequest, res: Response) => 
 router.post('/', auth, async (req: AuthRequest, res: Response) => {
   try {
     const { conversationId, content } = req.body
+
+    // Validate content before persisting (schema maxlength doesn't reject — it truncates)
+    if (typeof content !== 'string' || !content.trim() || content.length > 1000) {
+      return res.status(400).json({ message: 'Message must be 1-1000 characters' })
+    }
 
     // Guard: messaging requires an accepted connection
     const conversation = await Conversation.findById(conversationId)
@@ -186,6 +209,11 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
 // Mark messages as delivered
 router.put('/:conversationId/delivered', auth, async (req: AuthRequest, res: Response) => {
   try {
+    const conversation = await getConversationForUser(req.params.conversationId, req.userId)
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' })
+    }
+
     const result = await Message.updateMany(
       { conversation: req.params.conversationId, sender: { $ne: req.userId }, delivered: false },
       { delivered: true }
@@ -216,6 +244,11 @@ router.put('/:conversationId/delivered', auth, async (req: AuthRequest, res: Res
 // Mark messages as read (with read receipts)
 router.put('/:conversationId/read', auth, async (req: AuthRequest, res: Response) => {
   try {
+    const conversation = await getConversationForUser(req.params.conversationId, req.userId)
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' })
+    }
+
     await Message.updateMany(
       { conversation: req.params.conversationId, sender: { $ne: req.userId }, read: false },
       { read: true }
@@ -245,6 +278,11 @@ router.put('/:conversationId/read', auth, async (req: AuthRequest, res: Response
 // Get read/delivered status for messages in a conversation
 router.get('/:conversationId/status', auth, async (req: AuthRequest, res: Response) => {
   try {
+    const conversation = await getConversationForUser(req.params.conversationId, req.userId)
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' })
+    }
+
     const messages = await Message.find({
       conversation: req.params.conversationId,
       sender: req.userId,

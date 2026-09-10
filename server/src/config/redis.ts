@@ -149,11 +149,21 @@ class RedisCache {
   }
 }
 
-// Use Redis if available, otherwise fall back to memory cache
+// Use Redis if available, otherwise fall back to memory cache.
+// Dispatch dynamically: redisCache.connected flips to true only when initCache()
+// connects later, so a module-load-time const would stay bound to the memory cache forever.
 const redisCache = new RedisCache()
 const memoryCache = new MemoryCache()
 
-export const cache = redisCache.connected ? redisCache : memoryCache
+export const cache = {
+  get: (key: string) => (redisCache.connected ? redisCache.get(key) : memoryCache.get(key)),
+  set: (key: string, value: string, ttlSeconds?: number) =>
+    redisCache.connected ? redisCache.set(key, value, ttlSeconds) : memoryCache.set(key, value, ttlSeconds),
+  del: (key: string) => (redisCache.connected ? redisCache.del(key) : memoryCache.del(key)),
+  delPattern: (pattern: string) =>
+    redisCache.connected ? redisCache.delPattern(pattern) : memoryCache.delPattern(pattern),
+  flush: () => (redisCache.connected ? redisCache.flush() : memoryCache.flush()),
+}
 
 export async function initCache(): Promise<void> {
   if (REDIS_URL) {

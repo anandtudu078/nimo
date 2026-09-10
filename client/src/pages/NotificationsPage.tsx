@@ -4,11 +4,11 @@ import api from '../services/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Avatar from '../components/Avatar'
 import { formatDistanceToNow } from 'date-fns'
-import { FaHeart, FaComment, FaUserPlus, FaAt, FaCheckDouble, FaSmile, FaUserFriends, FaUserCheck } from 'react-icons/fa'
+import { FaHeart, FaComment, FaUserPlus, FaAt, FaCheckDouble, FaSmile, FaRetweet, FaUserFriends, FaUserCheck } from 'react-icons/fa'
 
 interface Notification {
   _id: string
-  type: 'like' | 'comment' | 'follow' | 'mention' | 'reaction' | 'connection_request' | 'connection_accepted'
+  type: 'like' | 'comment' | 'follow' | 'mention' | 'reaction' | 'repost' | 'connection_request' | 'connection_accepted'
   from: { _id: string; username: string; displayName: string; avatar?: string }
   post?: { _id: string; content: string }
   emoji?: string
@@ -72,6 +72,7 @@ export default function NotificationsPage() {
       case 'comment': return <FaComment className="text-blue-500" />
       case 'follow': return <FaUserPlus className="text-green-500" />
       case 'mention': return <FaAt className="text-purple-500" />
+      case 'repost': return <FaRetweet className="text-green-500" />
       case 'reaction': return <FaSmile className="text-pink-500" />
       case 'connection_request': return <FaUserFriends className="text-blue-400" />
       case 'connection_accepted': return <FaUserCheck className="text-green-500" />
@@ -85,6 +86,7 @@ export default function NotificationsPage() {
       case 'comment': return 'commented on your post'
       case 'follow': return 'started following you'
       case 'mention': return 'mentioned you in a post'
+      case 'repost': return 'reposted your post'
       case 'reaction': return `reacted${notification.emoji ? ` with ${notification.emoji}` : ''} to your post`
       case 'connection_request': return 'sent you a connection request'
       case 'connection_accepted': return 'accepted your connection request'

@@ -1,6 +1,10 @@
 import crypto from 'crypto'
 import { Router, Request, Response } from 'express'
 import User from '../models/User'
+
+// Store only a hash of reset/verification tokens — a DB leak alone must not
+// yield working credentials.
+const hashToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex')
 import PasswordReset from '../models/PasswordReset'
 import { auth, AuthRequest, generateToken } from '../middleware/auth'
 
@@ -11,14 +15,27 @@ router.post('/register', async (req: Request, res: Response) => {
   try {
     const { username, displayName, email, password } = req.body
 
-    const existingUser = await User.findOne({ $or: [{ email }, { username }] })
+    // Basic input validation
+    if (
+      typeof username !== 'string' || !/^[a-zA-Z0-9_]{3,20}$/.test(username) ||
+      typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      typeof password !== 'string' || password.length < 6 || password.length > 128 ||
+      typeof displayName !== 'string' || displayName.trim().length === 0 || displayName.length > 50
+    ) {
+      return res.status(400).json({ message: 'Invalid registration data' })
+    }
+
+    // Normalize email case so login is case-insensitive
+    const normalizedEmail = email.trim().toLowerCase()
+
+    const existingUser = await User.findOne({ $or: [{ email: normalizedEmail }, { username }] })
     if (existingUser) {
       return res.status(400).json({
         message: existingUser.email === email ? 'Email already registered' : 'Username already taken',
       })
     }
 
-    const user = new User({ username, displayName, email, password })
+    const user = new User({ username, displayName, email: normalizedEmail, password })
     await user.save()
 
     const token = generateToken(user._id.toString())
@@ -32,7 +49,11 @@ router.post('/register', async (req: Request, res: Response) => {
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body
-    const user = await User.findOne({ email })
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ message: 'Email and password are required' })
+    }
+    // Login lookup must match register's lowercase normalization
+    const user = await User.findOne({ email: email.trim().toLowerCase() })
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' })
     }
@@ -82,7 +103,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
 
     await PasswordReset.create({
       user: user._id,
-      token,
+      token: hashToken(token),
       expiresAt,
     })
 
@@ -111,7 +132,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     }
 
     const resetRecord = await PasswordReset.findOne({
-      token,
+      token: hashToken(token),
       used: false,
       expiresAt: { $gt: new Date() },
     })

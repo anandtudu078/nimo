@@ -89,13 +89,17 @@ export default function ConnectionsPage() {
   const handleMessage = async (userId: string) => {
     try {
       const res = await api.post(`/messages/conversation/${userId}`)
+      // The participant for the chat header is the user we're messaging (userId),
+      // not the other conversation member (which is me)
+      const participant = res.data.conversation.participants.find(
+        (p: ConnectionUser) => p._id === userId
+      )
+      if (!participant) throw new Error('Participant not found in conversation')
       navigate('/messages', {
         state: {
           startConversation: {
             conversationId: res.data.conversation._id,
-            participant: res.data.conversation.participants.find(
-              (p: ConnectionUser) => p._id !== userId
-            ),
+            participant,
           },
         },
       })

@@ -1,6 +1,8 @@
 import { Router, Response } from 'express'
 import { upload, uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary'
 import { auth, AuthRequest } from '../middleware/auth'
+import Post from '../models/Post'
+import User from '../models/User'
 
 const router = Router()
 
@@ -48,12 +50,24 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Delete an image from Cloudinary
+// Delete an image from Cloudinary (only if the caller owns it)
 router.delete('/', auth, async (req: AuthRequest, res: Response) => {
   try {
     const { url } = req.body
-    if (!url) {
+    if (!url || typeof url !== 'string') {
       return res.status(400).json({ message: 'No URL provided' })
+    }
+
+    // Ownership check: the URL must be attached to one of the caller's posts
+    // or their profile. Without this, any user could destroy any image in the
+    // Cloudinary account by URL.
+    const [ownedPost, ownedProfile] = await Promise.all([
+      Post.findOne({ author: req.userId, $or: [{ images: url }, { 'imageMeta.url': url }] }).select('_id'),
+      User.findOne({ _id: req.userId, $or: [{ avatar: url }, { profileBanner: url }] }).select('_id'),
+    ])
+
+    if (!ownedPost && !ownedProfile) {
+      return res.status(403).json({ message: 'You can only delete images you own' })
     }
 
     await deleteFromCloudinary(url)
