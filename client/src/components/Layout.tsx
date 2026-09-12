@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useUnreadCounts } from '../hooks/useUnreadCounts'
 import Avatar from './Avatar'
 import api from '../services/api'
-import { FaHome, FaSearch, FaBell, FaEnvelope, FaUser, FaPenSquare, FaSignOutAlt, FaBookmark, FaUserFriends } from 'react-icons/fa'
+import { FaHome, FaSearch, FaBell, FaEnvelope, FaUser, FaPenSquare, FaSignOutAlt, FaBookmark, FaUserFriends, FaCog } from 'react-icons/fa'
 
 interface TrendingTag {
   tag: string
@@ -84,6 +84,9 @@ export default function Layout() {
               <p className="font-semibold truncate text-white">{user?.displayName}</p>
               <p className="text-sm text-gray-500 truncate">@{user?.username}</p>
             </div>
+            <Link to="/settings" className="text-gray-500 hover:text-white" title="Settings">
+              <FaCog size={18} />
+            </Link>
             <button onClick={handleLogout} className="text-gray-500 hover:text-red-500" title="Logout">
               <FaSignOutAlt size={18} />
             </button>
