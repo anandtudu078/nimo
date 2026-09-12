@@ -13,6 +13,7 @@ export type FeedTab = 'foryou' | 'following'
 export default function FeedPage() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<Post[]>([])
+  const [error, setError] = useState('')
   const [newPostContent, setNewPostContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [posting, setPosting] = useState(false)
@@ -34,14 +35,25 @@ export default function FeedPage() {
   }, [tab])
 
   const fetchPosts = async () => {
+    setError('')
     try {
       const res = await api.get('/posts/feed', { params: { tab } })
       setPosts(res.data.posts)
-    } catch (error) {
-      console.error('Failed to fetch posts')
+    } catch (err: any) {
+      console.error('Failed to fetch posts', err)
+      setError(
+        err?.response
+          ? `The server responded with ${err.response.status}: ${err.response.data?.message || 'Failed to fetch posts'}`
+          : 'Could not reach the server. Check your connection and try again.'
+      )
     } finally {
       setLoading(false)
     }
+  }
+
+  const retryFetchPosts = () => {
+    setLoading(true)
+    fetchPosts()
   }
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -278,6 +290,14 @@ export default function FeedPage() {
       {/* Feed */}
       {loading ? (
         <LoadingSpinner />
+      ) : error ? (
+        <div className="text-center py-12 px-6">
+          <p className="text-lg font-medium text-red-400">Couldn't load the feed</p>
+          <p className="mt-1 text-sm text-gray-500 break-words">{error}</p>
+          <button onClick={retryFetchPosts} className="btn-primary text-sm mt-4">
+            Try again
+          </button>
+        </div>
       ) : posts.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           {tab === 'following' ? (
