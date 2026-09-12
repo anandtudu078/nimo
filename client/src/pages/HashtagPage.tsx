@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import PostCard from '../components/PostCard'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorState from '../components/ErrorState'
+import { getErrorMessage } from '../utils/errors'
 import api from '../services/api'
 import type { Post } from '../types'
 
 export default function HashtagPage() {
   const { tag } = useParams<{ tag: string }>()
   const [posts, setPosts] = useState<Post[]>([])
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -16,11 +19,13 @@ export default function HashtagPage() {
 
   const fetchPosts = async () => {
     setLoading(true)
+    setError('')
     try {
       const res = await api.get(`/posts/hashtag/${tag}`)
       setPosts(res.data.posts)
-    } catch (error) {
-      console.error('Failed to fetch posts')
+    } catch (err: any) {
+      console.error('Failed to fetch posts', err)
+      setError(getErrorMessage(err, 'Failed to fetch posts'))
     } finally {
       setLoading(false)
     }
@@ -45,6 +50,8 @@ export default function HashtagPage() {
 
       {loading ? (
         <LoadingSpinner />
+      ) : error ? (
+        <ErrorState title="Couldn't load posts" message={error} onRetry={fetchPosts} />
       ) : posts.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           <p className="text-lg font-medium">No posts with #{tag}</p>

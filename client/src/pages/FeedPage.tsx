@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import PostCard from '../components/PostCard'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorState from '../components/ErrorState'
+import { getErrorMessage } from '../utils/errors'
 import Avatar from '../components/Avatar'
 import PollCreator, { type PollData } from '../components/PollCreator'
 import api from '../services/api'
@@ -41,11 +43,7 @@ export default function FeedPage() {
       setPosts(res.data.posts)
     } catch (err: any) {
       console.error('Failed to fetch posts', err)
-      setError(
-        err?.response
-          ? `The server responded with ${err.response.status}: ${err.response.data?.message || 'Failed to fetch posts'}`
-          : 'Could not reach the server. Check your connection and try again.'
-      )
+      setError(getErrorMessage(err, 'Failed to fetch posts'))
     } finally {
       setLoading(false)
     }
@@ -291,13 +289,7 @@ export default function FeedPage() {
       {loading ? (
         <LoadingSpinner />
       ) : error ? (
-        <div className="text-center py-12 px-6">
-          <p className="text-lg font-medium text-red-400">Couldn't load the feed</p>
-          <p className="mt-1 text-sm text-gray-500 break-words">{error}</p>
-          <button onClick={retryFetchPosts} className="btn-primary text-sm mt-4">
-            Try again
-          </button>
-        </div>
+        <ErrorState title="Couldn't load the feed" message={error} onRetry={retryFetchPosts} />
       ) : posts.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           {tab === 'following' ? (

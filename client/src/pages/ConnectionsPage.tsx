@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorState from '../components/ErrorState'
+import { getErrorMessage } from '../utils/errors'
 import Avatar from '../components/Avatar'
 import { formatDistanceToNow } from 'date-fns'
 import { FaUserPlus, FaEnvelope, FaUserCheck, FaTimes } from 'react-icons/fa'
@@ -28,20 +30,28 @@ interface ConnectionRequest {
 export default function ConnectionsPage() {
   const [connections, setConnections] = useState<ConnectionEntry[]>([])
   const [requests, setRequests] = useState<ConnectionRequest[]>([])
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
   const fetchConnections = useCallback(async () => {
+    setError('')
     try {
       const res = await api.get('/connections')
       setConnections(res.data.connections)
       setRequests(res.data.requests)
-    } catch (error) {
-      console.error('Failed to fetch connections')
+    } catch (err: any) {
+      console.error('Failed to fetch connections', err)
+      setError(getErrorMessage(err, 'Failed to fetch connections'))
     } finally {
       setLoading(false)
     }
   }, [])
+
+  const retryConnections = () => {
+    setLoading(true)
+    fetchConnections()
+  }
 
   useEffect(() => {
     fetchConnections()
@@ -119,6 +129,8 @@ export default function ConnectionsPage() {
 
       {loading ? (
         <LoadingSpinner />
+      ) : error ? (
+        <ErrorState title="Couldn't load connections" message={error} onRetry={retryConnections} />
       ) : (
         <div>
           {/* Incoming requests */}

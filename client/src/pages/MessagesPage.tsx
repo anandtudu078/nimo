@@ -4,6 +4,8 @@ import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../hooks/useSocket'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorState from '../components/ErrorState'
+import { getErrorMessage } from '../utils/errors'
 import Avatar from '../components/Avatar'
 import { formatDistanceToNow } from 'date-fns'
 import { FaPaperPlane, FaArrowLeft } from 'react-icons/fa'
@@ -69,6 +71,7 @@ export default function MessagesPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -176,6 +179,7 @@ export default function MessagesPage() {
   }, [messages])
 
   const fetchConversations = async () => {
+    setError('')
     try {
       const res = await api.get('/messages/conversations')
       setConversations(res.data.conversations)
@@ -195,11 +199,17 @@ export default function MessagesPage() {
           })
         }
       }
-    } catch (error) {
-      console.error('Failed to fetch conversations')
+    } catch (err: any) {
+      console.error('Failed to fetch conversations', err)
+      setError(getErrorMessage(err, 'Failed to fetch conversations'))
     } finally {
       setLoading(false)
     }
+  }
+
+  const retryConversations = () => {
+    setLoading(true)
+    fetchConversations()
   }
 
   const fetchMessages = async (conversationId: string) => {
@@ -299,6 +309,8 @@ export default function MessagesPage() {
 
         {loading ? (
           <LoadingSpinner />
+        ) : error ? (
+          <ErrorState title="Couldn't load conversations" message={error} onRetry={retryConversations} />
         ) : conversations.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <p>No conversations yet</p>

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorState from '../components/ErrorState'
+import { getErrorMessage } from '../utils/errors'
 import Avatar from '../components/Avatar'
 import { formatDistanceToNow } from 'date-fns'
 import { FaHeart, FaComment, FaUserPlus, FaAt, FaCheckDouble, FaSmile, FaRetweet, FaUserFriends, FaUserCheck } from 'react-icons/fa'
@@ -19,6 +21,7 @@ interface Notification {
 export default function NotificationsPage() {
   const navigate = useNavigate()
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'mentions'>('all')
 
@@ -27,14 +30,21 @@ export default function NotificationsPage() {
   }, [])
 
   const fetchNotifications = async () => {
+    setError('')
     try {
       const res = await api.get('/notifications')
       setNotifications(res.data.notifications)
-    } catch (error) {
-      console.error('Failed to fetch notifications')
+    } catch (err: any) {
+      console.error('Failed to fetch notifications', err)
+      setError(getErrorMessage(err, 'Failed to fetch notifications'))
     } finally {
       setLoading(false)
     }
+  }
+
+  const retryNotifications = () => {
+    setLoading(true)
+    fetchNotifications()
   }
 
   const markAllAsRead = async () => {
@@ -134,6 +144,8 @@ export default function NotificationsPage() {
       <div>
         {loading ? (
           <LoadingSpinner />
+        ) : error ? (
+          <ErrorState title="Couldn't load notifications" message={error} onRetry={retryNotifications} />
         ) : filteredNotifications.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <p className="text-lg font-medium">No notifications yet</p>
