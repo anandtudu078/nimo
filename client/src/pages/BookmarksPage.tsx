@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import PostCard from '../components/PostCard'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorState from '../components/ErrorState'
+import { getErrorMessage } from '../utils/errors'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import type { Post } from '../types'
@@ -9,6 +11,7 @@ import { FaBookmark } from 'react-icons/fa'
 export default function BookmarksPage() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<Post[]>([])
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -18,14 +21,21 @@ export default function BookmarksPage() {
   }, [user?._id])
 
   const fetchBookmarks = async () => {
+    setError('')
     try {
       const res = await api.get(`/posts/user/${user?._id}/bookmarks`)
       setPosts(res.data.posts)
-    } catch (error) {
-      console.error('Failed to fetch bookmarks')
+    } catch (err: any) {
+      console.error('Failed to fetch bookmarks', err)
+      setError(getErrorMessage(err, 'Failed to fetch bookmarks'))
     } finally {
       setLoading(false)
     }
+  }
+
+  const retryBookmarks = () => {
+    setLoading(true)
+    fetchBookmarks()
   }
 
   const handleDeletePost = (postId: string) => {
@@ -43,6 +53,8 @@ export default function BookmarksPage() {
       <div>
         {loading ? (
           <LoadingSpinner />
+        ) : error ? (
+          <ErrorState title="Couldn't load bookmarks" message={error} onRetry={retryBookmarks} />
         ) : posts.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <FaBookmark size={48} className="mx-auto mb-4 text-gray-700" />

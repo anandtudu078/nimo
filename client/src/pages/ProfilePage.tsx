@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import PostCard from '../components/PostCard'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorState from '../components/ErrorState'
+import { getErrorMessage } from '../utils/errors'
 import Avatar from '../components/Avatar'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -20,6 +22,7 @@ export default function ProfilePage() {
   const [posts, setPosts] = useState<Post[]>([])
   const [likedPosts, setLikedPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'posts' | 'likes'>('posts')
   const [isFollowing, setIsFollowing] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('none')
@@ -45,6 +48,7 @@ export default function ProfilePage() {
   }, [userId])
 
   const fetchProfile = async () => {
+    setError('')
     try {
       const [userRes, postsRes, likedRes, connRes] = await Promise.all([
         api.get(`/users/${userId}`),
@@ -62,11 +66,20 @@ export default function ProfilePage() {
       if (status === 'accepted') setConnectionStatus('accepted')
       else if (status === 'pending') setConnectionStatus(direction === 'outgoing' ? 'pending_outgoing' : 'pending_incoming')
       else setConnectionStatus('none')
-    } catch (error) {
-      console.error('Failed to fetch profile')
+    } catch (err: any) {
+      console.error('Failed to fetch profile', err)
+      // A 404 is a real "no such user" (keep the empty state); anything else is a load failure
+      if (err?.response?.status !== 404) {
+        setError(getErrorMessage(err, 'Failed to load this profile'))
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  const retryProfile = () => {
+    setLoading(true)
+    fetchProfile()
   }
 
   const handleBlock = async () => {
@@ -166,6 +179,10 @@ export default function ProfilePage() {
 
   if (loading) {
     return <LoadingSpinner />
+  }
+
+  if (error) {
+    return <ErrorState title="Couldn't load profile" message={error} onRetry={retryProfile} />
   }
 
   if (!profileUser) {

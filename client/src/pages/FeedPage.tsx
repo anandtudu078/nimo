@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import PostCard from '../components/PostCard'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorState from '../components/ErrorState'
+import { getErrorMessage } from '../utils/errors'
 import Avatar from '../components/Avatar'
 import PollCreator, { type PollData } from '../components/PollCreator'
 import api from '../services/api'
@@ -13,6 +15,7 @@ export type FeedTab = 'foryou' | 'following'
 export default function FeedPage() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<Post[]>([])
+  const [error, setError] = useState('')
   const [newPostContent, setNewPostContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [posting, setPosting] = useState(false)
@@ -34,14 +37,21 @@ export default function FeedPage() {
   }, [tab])
 
   const fetchPosts = async () => {
+    setError('')
     try {
       const res = await api.get('/posts/feed', { params: { tab } })
       setPosts(res.data.posts)
-    } catch (error) {
-      console.error('Failed to fetch posts')
+    } catch (err: any) {
+      console.error('Failed to fetch posts', err)
+      setError(getErrorMessage(err, 'Failed to fetch posts'))
     } finally {
       setLoading(false)
     }
+  }
+
+  const retryFetchPosts = () => {
+    setLoading(true)
+    fetchPosts()
   }
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -278,6 +288,8 @@ export default function FeedPage() {
       {/* Feed */}
       {loading ? (
         <LoadingSpinner />
+      ) : error ? (
+        <ErrorState title="Couldn't load the feed" message={error} onRetry={retryFetchPosts} />
       ) : posts.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           {tab === 'following' ? (
