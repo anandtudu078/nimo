@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import Repost from '../models/Repost'
 import Post from '../models/Post'
 import Notification from '../models/Notification'
+import { notifyOnce } from '../utils/notify'
 import { auth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
@@ -25,14 +26,14 @@ router.post('/:postId', auth, async (req: AuthRequest, res: Response) => {
     }
 
     // Create repost
-    await Repost.create({ user: req.userId, originalPost: postId, comment })
+    await Repost.create({ user: req.userId!, originalPost: postId, comment })
     await Post.findByIdAndUpdate(postId, { $inc: { shareCount: 1 } })
 
-    // Notify original author
+    // Notify original author (deduped — repost toggling doesn't re-alert)
     if (post.author.toString() !== req.userId) {
-      await Notification.create({
+      await notifyOnce({
         user: post.author,
-        from: req.userId,
+        from: req.userId!,
         type: 'repost',
         post: post._id,
       })

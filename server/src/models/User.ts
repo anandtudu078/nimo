@@ -13,6 +13,7 @@ export interface IUser extends Document {
   pinnedPost?: mongoose.Types.ObjectId
   isVerified: boolean
   emailVerified: boolean
+  tokenVersion: number
   fcmTokens: string[]
   studyYear?: string
   followers: mongoose.Types.ObjectId[]
@@ -39,6 +40,8 @@ const userSchema = new Schema<IUser>(
     pinnedPost: { type: Schema.Types.ObjectId, ref: 'Post', default: null },
     isVerified: { type: Boolean, default: false },
     emailVerified: { type: Boolean, default: false },
+    // Bumped on password change/reset to invalidate all previously issued JWTs
+    tokenVersion: { type: Number, default: 0, select: false },
     fcmTokens: [{ type: String }],
     studyYear: { type: String, default: '' },
     followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],

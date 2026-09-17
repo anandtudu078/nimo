@@ -19,15 +19,15 @@ export function getJwtSecret(): string {
 }
 
 export function signToken(
-  payload: { userId: string },
+  payload: { userId: string; ver?: number },
   expiresIn: jwt.SignOptions['expiresIn'] = '7d'
 ): string {
   return jwt.sign(payload, getJwtSecret(), { expiresIn })
 }
 
-export function verifyToken(token: string): { userId: string } | null {
+export function verifyToken(token: string): { userId: string; ver?: number } | null {
   try {
-    return jwt.verify(token, getJwtSecret()) as { userId: string }
+    return jwt.verify(token, getJwtSecret()) as { userId: string; ver?: number }
   } catch {
     return null
   }

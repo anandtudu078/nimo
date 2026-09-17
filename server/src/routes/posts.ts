@@ -3,9 +3,13 @@ import mongoose from 'mongoose'
 import Post from '../models/Post'
 import User from '../models/User'
 import Poll from '../models/Poll'
+import Repost from '../models/Repost'
+import Reaction from '../models/Reaction'
+import View from '../models/View'
 import Notification from '../models/Notification'
 import { auth, AuthRequest } from '../middleware/auth'
 import Hashtag from '../models/Hashtag'
+import { notifyOnce } from '../utils/notify'
 import { spamFilter, checkContent } from '../middleware/spamFilter'
 
 const router = Router()
@@ -48,6 +52,19 @@ async function resolveMentionedUsers(text: string, authorId: string) {
     $or: usernames.map((u) => ({ username: exactCaseInsensitive(u) })),
     _id: { $ne: authorId },
   }).select('_id username blockedUsers')
+}
+
+// Shared content/images validation for create and edit. Schema maxlength
+// silently TRUNCATES instead of rejecting, so both routes must check
+// explicitly before persisting. Returns an error message or null.
+function validatePostPayload(content: unknown, images: unknown[]): string | null {
+  if (typeof content === 'string' && content.length > 280) {
+    return 'Post content must be 280 characters or fewer'
+  }
+  if (images.length > 4 || images.some((i) => typeof i !== 'string' || (i as string).length > 2048)) {
+    return 'Invalid images payload'
+  }
+  return null
 }
 
 // Create mention notifications, respecting blocks and skipping duplicates
@@ -112,7 +129,12 @@ router.get('/hashtag/:tag', auth, async (req: AuthRequest, res: Response) => {
     // Escape regex metacharacters so tags like "c++" can't break (or inject into) the query
     const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const regex = new RegExp(`#${escapedTag}\\b`, 'i')
-    const posts = await Post.find({ content: regex })
+
+    // Hashtag results must also respect blocks and mutes
+    const currentUser = await User.findById(req.userId).select('blockedUsers mutedUsers')
+    const hiddenAuthors = [...(currentUser?.blockedUsers || []), ...(currentUser?.mutedUsers || [])]
+
+    const posts = await Post.find({ content: regex, author: { $nin: hiddenAuthors } })
       .sort({ createdAt: -1 })
       .limit(50)
       .populate(postPopulate)
@@ -135,12 +157,8 @@ router.post('/', auth, spamFilter, async (req: AuthRequest, res: Response) => {
     }
 
     // Validate types/lengths before persisting (schema maxlength doesn't reject — it truncates)
-    if (hasText && content.length > 280) {
-      return res.status(400).json({ message: 'Post content must be 280 characters or fewer' })
-    }
-    if (hasImages && (images.length > 4 || images.some((i: any) => typeof i !== 'string' || i.length > 2048))) {
-      return res.status(400).json({ message: 'Invalid images payload' })
-    }
+    const payloadError = validatePostPayload(content || '', hasImages ? images : [])
+    if (payloadError) return res.status(400).json({ message: payloadError })
     if (quotedPostId !== undefined && !mongoose.isValidObjectId(quotedPostId)) {
       return res.status(400).json({ message: 'Invalid quotedPostId' })
     }
@@ -212,19 +230,36 @@ router.get('/feed', auth, async (req: AuthRequest, res: Response) => {
     const skip = (page - 1) * limit
     const tab = req.query.tab === 'following' ? 'following' : 'foryou'
 
-    // Exclude posts from blocked users
-    const currentUser = await User.findById(req.userId).select('blockedUsers following')
+    // Exclude blocked users, muted users, and muted keywords
+    const currentUser = await User.findById(req.userId).select(
+      'blockedUsers mutedUsers mutedKeywords following'
+    )
     const blockedIds = currentUser?.blockedUsers || []
+    const mutedIds = currentUser?.mutedUsers || []
+    const mutedKeywords: string[] = currentUser?.mutedKeywords || []
 
-    let authorFilter: Record<string, any> = { $nin: blockedIds }
+    // Hidden authors = blocked + muted (own posts are always exempt since
+    // req.userId is never in either list)
+    const hiddenAuthors = [...blockedIds, ...mutedIds]
+
+    let authorFilter: Record<string, any> = { $nin: hiddenAuthors }
     if (tab === 'following') {
       const followingIds = currentUser?.following || []
       // Include your own posts so the tab is never empty of your own activity
       const visibleIds = [...followingIds, req.userId]
-      authorFilter = { $in: visibleIds, $nin: blockedIds }
+      authorFilter = { $in: visibleIds, $nin: hiddenAuthors }
     }
 
-    const query = { author: authorFilter }
+    const query: Record<string, any> = { author: authorFilter }
+
+    // Keyword mutes: exclude posts whose content contains any muted keyword
+    // (case-insensitive). Comment content is not filtered — matches how
+    // muted users work (their posts vanish, they can still reply).
+    if (mutedKeywords.length > 0) {
+      query.$and = mutedKeywords.map((kw) => ({
+        content: { $not: new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+      }))
+    }
     const posts = await Post.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -291,12 +326,12 @@ router.post('/:id/like', auth, async (req: AuthRequest, res: Response) => {
     // ObjectId arrays must be compared as strings — indexOf against a raw string always misses
     const index = post.likes.findIndex((id) => id.toString() === req.userId)
     if (index === -1) {
-      post.likes.push(req.userId as any)
-      // Create notification
+      post.likes.push(req.userId! as any)
+      // Create notification (deduped — re-liking doesn't spam the author)
       if (post.author.toString() !== req.userId) {
-        await Notification.create({
+        await notifyOnce({
           user: post.author,
-          from: req.userId,
+          from: req.userId!,
           type: 'like',
           post: post._id,
         })
@@ -321,18 +356,18 @@ router.post('/:id/comment', auth, spamFilter, async (req: AuthRequest, res: Resp
       return res.status(404).json({ message: 'Post not found' })
     }
 
-    const comment = { author: req.userId as any, content }
+    const comment = { author: req.userId! as any, content }
     post.comments.push(comment as any)
     await post.save()
 
     await post.populate({ path: 'comments.author', select: 'username displayName avatar' })
     const newComment = post.comments[post.comments.length - 1]
 
-    // Create notification for the post author
+    // Create notification for the post author (deduped)
     if (post.author.toString() !== req.userId) {
-      await Notification.create({
+      await notifyOnce({
         user: post.author,
-        from: req.userId,
+        from: req.userId!,
         type: 'comment',
         post: post._id,
       })
@@ -359,6 +394,14 @@ router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
     if (post.author.toString() !== req.userId) {
       return res.status(403).json({ message: 'Not authorized' })
     }
+
+    // Bug fix: edit previously bypassed the length/payload validation that
+    // create enforces, and schema maxlength silently TRUNCATED oversized
+    // content instead of rejecting it — edits could corrupt posts silently.
+    const nextContent = content !== undefined ? content : post.content
+    const nextImages = images !== undefined ? images : post.images
+    const payloadError = validatePostPayload(nextContent || '', Array.isArray(nextImages) ? nextImages : [])
+    if (payloadError) return res.status(400).json({ message: payloadError })
 
     // Decrement old hashtags
     const oldTags = extractHashtags(post.content)
@@ -409,8 +452,18 @@ router.delete('/:id', auth, async (req: AuthRequest, res: Response) => {
     const tags = extractHashtags(post.content)
     if (tags.length > 0) await updateHashtags(tags, -1)
 
-    // Clean up poll if attached
-    await Poll.deleteOne({ post: req.params.id })
+    // Cascading cleanup — previously Reposts/Reactions/Views and notifications
+    // referencing the post survived deletion, and quoting posts kept a dangling
+    // quotedPost ref (populate resolves to null and can crash the client).
+    await Promise.all([
+      Poll.deleteOne({ post: post._id }),
+      Repost.deleteMany({ originalPost: post._id }),
+      Reaction.deleteMany({ post: post._id }),
+      View.deleteMany({ post: post._id }),
+      Notification.deleteMany({ post: post._id }),
+      // Posts that quoted this one lose their reference (content untouched)
+      Post.updateMany({ quotedPost: post._id }, { $unset: { quotedPost: 1 }, $inc: { shareCount: -1 } }),
+    ])
 
     await Post.findByIdAndDelete(req.params.id)
     res.json({ message: 'Post deleted' })

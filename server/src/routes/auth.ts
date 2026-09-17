@@ -38,7 +38,7 @@ router.post('/register', async (req: Request, res: Response) => {
     const user = new User({ username, displayName, email: normalizedEmail, password })
     await user.save()
 
-    const token = generateToken(user._id.toString())
+    const token = generateToken(user._id.toString(), (user as any).tokenVersion ?? 0)
     res.status(201).json({ token, user })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to register' })
@@ -52,8 +52,9 @@ router.post('/login', async (req: Request, res: Response) => {
     if (typeof email !== 'string' || typeof password !== 'string') {
       return res.status(400).json({ message: 'Email and password are required' })
     }
-    // Login lookup must match register's lowercase normalization
-    const user = await User.findOne({ email: email.trim().toLowerCase() })
+    // Login lookup must match register's lowercase normalization.
+    // +tokenVersion: the field is select:false but the JWT must carry it.
+    const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+tokenVersion')
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' })
     }
@@ -63,7 +64,7 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Invalid email or password' })
     }
 
-    const token = generateToken(user._id.toString())
+    const token = generateToken(user._id.toString(), (user as any).tokenVersion ?? 0)
     res.json({ token, user })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to login' })
@@ -141,20 +142,23 @@ router.post('/reset-password', async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Invalid or expired reset token' })
     }
 
-    // Update password
-    const user = await User.findById(resetRecord.user)
+    const user = await User.findById(resetRecord.user).select('+tokenVersion')
     if (!user) {
       return res.status(404).json({ message: 'User not found' })
     }
 
     user.password = password
-    await user.save()
+    await user.save() // triggers the pre-save hash hook
+
+    // Bump token version — every previously issued JWT for this account
+    // becomes invalid immediately (stolen reset links can't hijack sessions).
+    await User.findByIdAndUpdate(user._id, { $inc: { tokenVersion: 1 } })
 
     // Mark token as used
     resetRecord.used = true
     await resetRecord.save()
 
-    res.json({ message: 'Password reset successful' })
+    res.json({ message: 'Password reset successful. Please log in again.' })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to reset password' })
   }

@@ -2,7 +2,18 @@ import { Router, Response } from 'express'
 import User from '../models/User'
 import Post from '../models/Post'
 import Notification from '../models/Notification'
-import { Message } from '../models/Message'
+import { Message, Conversation } from '../models/Message'
+import Poll from '../models/Poll'
+import Repost from '../models/Repost'
+import Reaction from '../models/Reaction'
+import View from '../models/View'
+import Connection from '../models/Connection'
+import Draft from '../models/Draft'
+import Mute from '../models/Mute'
+import PasswordReset from '../models/PasswordReset'
+import EmailVerification from '../models/EmailVerification'
+import Hashtag from '../models/Hashtag'
+import { notifyOnce } from '../utils/notify'
 import { auth, AuthRequest } from '../middleware/auth'
 import { upload, uploadToCloudinary } from '../config/cloudinary'
 
@@ -11,6 +22,12 @@ const router = Router()
 // Case-insensitive exact username match (usernames keep original case in the DB)
 function exactCaseInsensitive(username: string) {
   return new RegExp(`^${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+}
+
+// Local hashtag extraction (same pattern as posts.ts) for account-deletion cleanup
+function extractHashtagsFromContent(text: string): string[] {
+  const matches = text.match(/#\w+/g)
+  return matches ? [...new Set(matches.map((h) => h.slice(1).toLowerCase()))] : []
 }
 
 // Upload avatar (via Cloudinary)
@@ -176,8 +193,8 @@ router.post('/:userId/follow', auth, async (req: AuthRequest, res: Response) => 
       currentUser.following.push(userToFollow._id as any)
       userToFollow.followers.push(currentUser._id as any)
 
-      // Create notification
-      await Notification.create({
+      // Create notification (deduped — follow/unfollow cycles don't re-alert)
+      await notifyOnce({
         user: userToFollow._id,
         from: currentUser._id,
         type: 'follow',
@@ -315,7 +332,7 @@ router.put('/me/password', auth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'New password must be at least 6 characters' })
     }
 
-    const user = await User.findById(req.userId)
+    const user = await User.findById(req.userId).select('+tokenVersion')
     if (!user) return res.status(404).json({ message: 'User not found' })
 
     const isMatch = await user.comparePassword(currentPassword)
@@ -326,6 +343,9 @@ router.put('/me/password', auth, async (req: AuthRequest, res: Response) => {
     user.password = newPassword
     await user.save() // triggers the pre-save hash hook
 
+    // Invalidate all existing sessions (other devices / stolen tokens)
+    await User.findByIdAndUpdate(user._id, { $inc: { tokenVersion: 1 } })
+
     res.json({ message: 'Password updated successfully' })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to change password' })
@@ -335,26 +355,78 @@ router.put('/me/password', auth, async (req: AuthRequest, res: Response) => {
 // Delete account
 router.delete('/me', auth, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.userId
+    const userId = req.userId!
 
-    // Delete all user's posts
+    // Snapshot the user's hashtags before their posts are removed, so the
+    // counts can be decremented below.
+    const ownPosts = await Post.find({ author: userId }).select('content quotedPost')
+    const tagCounts = new Map<string, number>()
+    for (const p of ownPosts) {
+      for (const tag of extractHashtagsFromContent(p.content || '')) {
+        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1)
+      }
+    }
+
+    // Delete all user's posts (and their attached polls + engagement data)
+    const ownPostIds = ownPosts.map((p) => p._id)
+    await Poll.deleteMany({ post: { $in: ownPostIds } })
+    await Repost.deleteMany({ $or: [{ originalPost: { $in: ownPostIds } }, { user: userId }] })
+    await Reaction.deleteMany({ $or: [{ post: { $in: ownPostIds } }, { user: userId }] })
+    await View.deleteMany({ post: { $in: ownPostIds } })
+
+    // Posts that quoted any of the deleted posts lose their reference
+    await Post.updateMany(
+      { quotedPost: { $in: ownPostIds } },
+      { $unset: { quotedPost: 1 }, $inc: { shareCount: -1 } }
+    )
     await Post.deleteMany({ author: userId })
 
-    // Remove user from all followers/following lists
-    await User.updateMany(
-      { followers: userId },
-      { $pull: { followers: userId } }
+    // Decrement hashtag counts (documents hitting zero are removed)
+    for (const [tag, count] of tagCounts) {
+      await Hashtag.findOneAndUpdate(
+        { tag },
+        { $inc: { count: -count } },
+        { new: true }
+      ).then((h) => {
+        if (h && h.count <= 0) return h.deleteOne()
+      })
+    }
+
+    // Remove the user's likes/comments from other people's posts
+    await Post.updateMany(
+      { likes: userId },
+      { $pull: { likes: userId } }
     )
+    await Post.updateMany(
+      { 'comments.author': userId },
+      { $pull: { comments: { author: userId } } }
+    )
+
+    // Remove user from all followers/following/muted lists
     await User.updateMany(
-      { following: userId },
-      { $pull: { following: userId } }
+      { $or: [{ followers: userId }, { following: userId }, { mutedUsers: userId }, { blockedUsers: userId }] },
+      { $pull: { followers: userId, following: userId, mutedUsers: userId, blockedUsers: userId } }
     )
 
     // Delete all notifications for/from this user
     await Notification.deleteMany({ $or: [{ user: userId }, { from: userId }] })
 
-    // Delete all messages in conversations involving this user
+    // Conversations: remove messages the user sent, then delete any
+    // conversation they participated in (1:1 chats become empty).
     await Message.deleteMany({ sender: userId })
+    const conversations = await Conversation.find({ participants: userId }).select('_id')
+    const convIds = conversations.map((c) => c._id)
+    if (convIds.length > 0) {
+      await Message.deleteMany({ conversation: { $in: convIds } })
+      await Conversation.deleteMany({ _id: { $in: convIds } })
+    }
+
+    // Delete remaining per-user records
+    await Connection.deleteMany({ $or: [{ requester: userId }, { recipient: userId }] })
+    await Draft.deleteMany({ author: userId })
+    await Mute.deleteMany({ user: userId })
+    await PasswordReset.deleteMany({ user: userId })
+    await EmailVerification.deleteMany({ user: userId })
 
     // Delete the user itself
     await User.findByIdAndDelete(userId)

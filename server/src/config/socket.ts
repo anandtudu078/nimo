@@ -1,6 +1,7 @@
 import { Server as HttpServer } from 'http'
 import { Server, Socket } from 'socket.io'
 import { verifyToken } from './jwt'
+import User from '../models/User'
 
 interface AuthenticatedSocket extends Socket {
   userId?: string
@@ -36,7 +37,7 @@ export function setupSocketIO(httpServer: HttpServer): Server {
   })
 
   // Auth middleware
-  io.use((socket: AuthenticatedSocket, next) => {
+  io.use(async (socket: AuthenticatedSocket, next) => {
     const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '')
     if (!token) {
       return next(new Error('Authentication required'))
@@ -46,6 +47,18 @@ export function setupSocketIO(httpServer: HttpServer): Server {
     if (!decoded) {
       return next(new Error('Invalid token'))
     }
+
+    // Enforce token versioning so password changes/reset also drop
+    // realtime connections, not just REST requests.
+    try {
+      const user = await User.findById(decoded.userId).select('tokenVersion')
+      if (!user || (decoded.ver ?? 0) !== (user as any).tokenVersion) {
+        return next(new Error('Session expired'))
+      }
+    } catch {
+      return next(new Error('Authentication failed'))
+    }
+
     socket.userId = decoded.userId
     next()
   })
