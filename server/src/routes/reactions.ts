@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import Reaction from '../models/Reaction'
 import Post from '../models/Post'
 import Notification from '../models/Notification'
+import { notifyOnce } from '../utils/notify'
 import { auth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
@@ -40,16 +41,16 @@ router.post('/:postId', auth, async (req: AuthRequest, res: Response) => {
     }
 
     // Add new reaction
-    await Reaction.create({ user: req.userId, post: postId, emoji })
+    await Reaction.create({ user: req.userId!, post: postId, emoji })
     const currentCount = post.reactionCounts?.get(emoji) || 0
     post.reactionCounts.set(emoji, currentCount + 1)
     await post.save()
 
-    // Notify post author
+    // Notify post author (deduped — toggling the same emoji doesn't re-alert)
     if (post.author.toString() !== req.userId) {
-      await Notification.create({
+      await notifyOnce({
         user: post.author,
-        from: req.userId,
+        from: req.userId!,
         type: 'reaction',
         post: post._id,
         emoji,
