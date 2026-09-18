@@ -10,6 +10,11 @@ export interface IMessage extends Document {
 }
 
 export interface IConversation extends Document {
+  // Groups have > 2 participants; 1:1 DMs keep exactly 2 (legacy behavior)
+  isGroup: boolean
+  groupName?: string
+  groupAvatar?: string
+  admin: mongoose.Types.ObjectId[]
   participants: mongoose.Types.ObjectId[]
   lastMessage: {
     content: string
@@ -33,6 +38,10 @@ const messageSchema = new Schema<IMessage>(
 
 const conversationSchema = new Schema<IConversation>(
   {
+    isGroup: { type: Boolean, default: false },
+    groupName: { type: String, default: '', maxlength: 50, trim: true },
+    groupAvatar: { type: String, default: '' },
+    admin: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     participants: [{ type: Schema.Types.ObjectId, ref: 'User', required: true }],
     lastMessage: {
       content: String,

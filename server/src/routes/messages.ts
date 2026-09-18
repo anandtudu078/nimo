@@ -7,6 +7,11 @@ import { emitToUser } from '../config/socket'
 
 const router = Router()
 
+// Group helper: is this user an admin of the conversation?
+function isAdmin(conversation: any, userId: string): boolean {
+  return (conversation.admin || []).some((a: any) => a.toString() === userId)
+}
+
 // Users must have an accepted connection before they can message each other
 async function requireConnection(a: string | undefined, b: string): Promise<boolean> {
   if (!a) return false
@@ -46,13 +51,27 @@ router.get('/conversations', auth, async (req: AuthRequest, res: Response) => {
     ])
     const unreadMap = new Map(unreadCounts.map((u: any) => [u._id.toString(), u.count]))
 
-    // Transform to include the other participant
+    // Transform: DMs expose `participant` (legacy shape); groups expose
+    // group metadata plus the full participant list for the client UI.
     const transformed = conversations.map((conv) => {
+      if (conv.isGroup) {
+        return {
+          _id: conv._id,
+          isGroup: true,
+          groupName: conv.groupName || 'Group',
+          groupAvatar: conv.groupAvatar || '',
+          admin: conv.admin,
+          participants: conv.participants,
+          lastMessage: conv.lastMessage,
+          unreadCount: unreadMap.get(conv._id.toString()) || 0,
+        }
+      }
       const participant = conv.participants.find(
         (p: any) => p._id.toString() !== req.userId
       )
       return {
         _id: conv._id,
+        isGroup: false,
         participant,
         lastMessage: conv.lastMessage,
         unreadCount: unreadMap.get(conv._id.toString()) || 0,
@@ -98,13 +117,16 @@ router.post('/conversation/:userId', auth, async (req: AuthRequest, res: Respons
       })
     }
 
-    // Check if conversation already exists
+    // Check if conversation already exists — DMs only, so a group that
+    // happens to contain both users is never mistaken for a 1:1 chat
     let conversation = await Conversation.findOne({
+      isGroup: false,
       participants: { $all: [req.userId, req.params.userId] },
     })
 
     if (!conversation) {
       conversation = new Conversation({
+        isGroup: false,
         participants: [req.userId, req.params.userId],
       })
       await conversation.save()
@@ -156,15 +178,19 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
     if (!isParticipant) {
       return res.status(403).json({ message: 'Not a participant of this conversation' })
     }
-    const connected = await requireConnection(
-      req.userId,
-      conversation.participants.find((p: any) => p.toString() !== req.userId)?.toString() || ''
-    )
-    if (!connected) {
-      return res.status(403).json({
-        message: 'You are no longer connected with this user',
-        code: 'CONNECTION_REQUIRED',
-      })
+    // Groups don't require a 1:1 connection — membership is the access gate.
+    // DMs still require an accepted connection.
+    if (!conversation.isGroup) {
+      const connected = await requireConnection(
+        req.userId,
+        conversation.participants.find((p: any) => p.toString() !== req.userId)?.toString() || ''
+      )
+      if (!connected) {
+        return res.status(403).json({
+          message: 'You are no longer connected with this user',
+          code: 'CONNECTION_REQUIRED',
+        })
+      }
     }
 
     const message = new Message({
@@ -298,6 +324,196 @@ router.get('/:conversationId/status', auth, async (req: AuthRequest, res: Respon
     res.json({ status })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to get message status' })
+  }
+})
+
+// Create a group chat (creator becomes the first admin)
+router.post('/groups', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, memberIds } = req.body as { name?: unknown; memberIds?: unknown }
+
+    const groupName = typeof name === 'string' ? name.trim() : ''
+    if (!groupName || groupName.length > 50) {
+      return res.status(400).json({ message: 'Group name must be 1-50 characters' })
+    }
+
+    // Members must be an array of unique ids that doesn't include the creator
+    const rawIds = Array.isArray(memberIds) ? memberIds : []
+    if (rawIds.some((id) => typeof id !== 'string')) {
+      return res.status(400).json({ message: 'Invalid member list' })
+    }
+    const memberSet = [...new Set(rawIds as string[])].filter((id) => id !== req.userId)
+    const uniqueMembers = [...new Set(memberSet.map((id) => id.toString()))]
+    if (uniqueMembers.length < 2) {
+      return res.status(400).json({ message: 'A group needs at least 3 members including you' })
+    }
+
+    // Verify all members exist and each is a connection of the creator
+    const members = await User.find({ _id: { $in: uniqueMembers } }).select('_id blockedUsers')
+    if (members.length !== uniqueMembers.length) {
+      return res.status(404).json({ message: 'One or more members not found' })
+    }
+    const creator = await User.findById(req.userId).select('blockedUsers')
+    if (!creator) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+    const creatorBlocked = (creator.blockedUsers || []).map((id: any) => id.toString())
+    for (const member of members) {
+      if (creatorBlocked.includes(member._id.toString())) {
+        return res.status(400).json({ message: 'Cannot add a user you have blocked' })
+      }
+      const memberBlocked = (member.blockedUsers || []).map((id: any) => id.toString())
+      if (memberBlocked.includes(req.userId!)) {
+        return res.status(400).json({ message: 'Cannot add a user who has blocked you' })
+      }
+      const connected = await Connection.findOne({
+        $or: [
+          { requester: req.userId, recipient: member._id },
+          { requester: member._id, recipient: req.userId },
+        ],
+        status: 'accepted',
+      })
+      if (!connected) {
+        return res.status(400).json({
+          message: 'All members must be connected with you before being added to a group',
+          code: 'CONNECTION_REQUIRED',
+        })
+      }
+    }
+
+    const conversation = await Conversation.create({
+      isGroup: true,
+      groupName,
+      admin: [req.userId],
+      participants: [req.userId, ...uniqueMembers],
+    })
+    await conversation.populate('participants', 'username displayName avatar')
+
+    // Tell every other member a new group exists so it appears in their list
+    const io = req.app.get('io')
+    uniqueMembers.forEach((memberId) => {
+      emitToUser(io, memberId, 'group_created', { conversationId: conversation._id })
+    })
+
+    res.status(201).json({ conversation })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to create group' })
+  }
+})
+
+// Get group details (participants, admins, name)
+router.get('/groups/:conversationId', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const conversation = await getConversationForUser(req.params.conversationId, req.userId)
+    if (!conversation || !conversation.isGroup) {
+      return res.status(404).json({ message: 'Group not found' })
+    }
+
+    await conversation.populate('participants', 'username displayName avatar')
+    res.json({ group: conversation })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to fetch group' })
+  }
+})
+
+// Admin adds a member to a group
+router.post('/groups/:conversationId/members', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const conversation = await getConversationForUser(req.params.conversationId, req.userId)
+    if (!conversation || !conversation.isGroup) {
+      return res.status(404).json({ message: 'Group not found' })
+    }
+    if (!isAdmin(conversation, req.userId!)) {
+      return res.status(403).json({ message: 'Only group admins can add members' })
+    }
+
+    const { userId } = req.body as { userId?: unknown }
+    if (typeof userId !== 'string' || !userId) {
+      return res.status(400).json({ message: 'User id is required' })
+    }
+    const alreadyIn = conversation.participants.some(
+      (p: any) => p.toString() === userId
+    )
+    if (alreadyIn) {
+      return res.status(400).json({ message: 'User is already a member' })
+    }
+
+    const newMember = await User.findById(userId).select('_id blockedUsers')
+    if (!newMember) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+    // Respect blocks in both directions
+    const newMemberBlocked = (newMember.blockedUsers || []).map((id: any) => id.toString())
+    if (newMemberBlocked.includes(req.userId!)) {
+      return res.status(403).json({ message: "You can't add this user" })
+    }
+    // The new member must be connected to the admin adding them
+    const connected = await Connection.findOne({
+      $or: [
+        { requester: req.userId, recipient: userId },
+        { requester: userId, recipient: req.userId },
+      ],
+      status: 'accepted',
+    })
+    if (!connected) {
+      return res.status(400).json({
+        message: 'You can only add people you are connected with',
+        code: 'CONNECTION_REQUIRED',
+      })
+    }
+
+    conversation.participants.push(userId as any)
+    await conversation.save()
+    await conversation.populate('participants', 'username displayName avatar')
+
+    // The member's list refreshes via group_created; existing members in the
+    // open chat get the participant update so the header stays current.
+    const io = req.app.get('io')
+    emitToUser(io, userId, 'group_created', { conversationId: conversation._id })
+    conversation.participants.forEach((p: any) => {
+      const pid = p._id ? p._id.toString() : p.toString()
+      if (pid !== req.userId) {
+        emitToUser(io, pid, 'group_updated', {
+          conversationId: conversation._id,
+          participants: conversation.participants,
+        })
+      }
+    })
+
+    res.json({ conversation })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to add member' })
+  }
+})
+
+// Leave a group (creator/admin can leave too — group survives without admins)
+router.post('/groups/:conversationId/leave', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const conversation = await getConversationForUser(req.params.conversationId, req.userId)
+    if (!conversation || !conversation.isGroup) {
+      return res.status(404).json({ message: 'Group not found' })
+    }
+
+    conversation.participants = conversation.participants.filter(
+      (p: any) => p.toString() !== req.userId
+    )
+    conversation.admin = conversation.admin.filter(
+      (p: any) => p.toString() !== req.userId
+    )
+    await conversation.save()
+
+    // Notify remaining members so they drop the departed user from the header
+    const io = req.app.get('io')
+    conversation.participants.forEach((p: any) => {
+      emitToUser(io, p.toString(), 'group_updated', {
+        conversationId: conversation._id,
+        participants: conversation.participants,
+      })
+    })
+
+    res.json({ message: 'You left the group' })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to leave group' })
   }
 })
 

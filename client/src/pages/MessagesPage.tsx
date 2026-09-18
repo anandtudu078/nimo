@@ -8,7 +8,14 @@ import ErrorState from '../components/ErrorState'
 import { getErrorMessage } from '../utils/errors'
 import Avatar from '../components/Avatar'
 import { formatDistanceToNow } from 'date-fns'
-import { FaPaperPlane, FaArrowLeft } from 'react-icons/fa'
+import {
+  FaPaperPlane,
+  FaArrowLeft,
+  FaUsers,
+  FaPlus,
+  FaSignOutAlt,
+} from 'react-icons/fa'
+import CreateGroupModal from '../components/CreateGroupModal'
 
 interface MessageParticipant {
   _id: string
@@ -19,9 +26,25 @@ interface MessageParticipant {
 
 interface Conversation {
   _id: string
-  participant: MessageParticipant
+  isGroup?: boolean
+  participant?: MessageParticipant
+  groupName?: string
+  groupAvatar?: string
+  admin?: string[]
+  participants?: MessageParticipant[]
   lastMessage?: { content: string; createdAt: string }
   unreadCount: number
+}
+
+// Display title for a conversation: group name, or the DM peer's name
+function conversationTitle(conv: Conversation): string {
+  if (conv.isGroup) return conv.groupName || 'Group'
+  return conv.participant?.displayName || 'Unknown'
+}
+
+function conversationAvatar(conv: Conversation): string | undefined {
+  if (conv.isGroup) return conv.groupAvatar || undefined
+  return conv.participant?.avatar
 }
 
 interface Message {
@@ -51,6 +74,7 @@ function formatMessageTime(value?: string): string {
 export default function MessagesPage() {
   const { user } = useAuth()
   const {
+    socket,
     connected,
     joinConversation,
     leaveConversation,
@@ -74,6 +98,9 @@ export default function MessagesPage() {
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
+  const [showCreateGroup, setShowCreateGroup] = useState(false)
+  const [showMembers, setShowMembers] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const pendingConversationRef = useRef<{ conversationId: string; participant: MessageParticipant } | null>(null)
@@ -173,6 +200,32 @@ export default function MessagesPage() {
     })
     return () => { cleanup1(); cleanup2() }
   }, [selectedConversation, onUserTyping, onUserTypingStop, user?._id])
+
+  // Realtime group membership: refresh the list when a new group reaches us,
+  // and update the open chat's participant list when members change.
+  useEffect(() => {
+    const onGroupCreated = () => fetchConversations()
+    const onGroupUpdated = (data: any) => {
+      if (selectedConversation && data.conversationId === selectedConversation._id) {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c._id === data.conversationId && data.participants
+              ? { ...c, participants: data.participants }
+              : c
+          )
+        )
+      } else {
+        fetchConversations()
+      }
+    }
+    socket?.on('group_created', onGroupCreated)
+    socket?.on('group_updated', onGroupUpdated)
+    return () => {
+      socket?.off('group_created', onGroupCreated)
+      socket?.off('group_updated', onGroupUpdated)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConversation])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -284,6 +337,21 @@ export default function MessagesPage() {
     }, 2000)
   }, [selectedConversation, startTyping, stopTyping])
 
+  // Leave the currently open group and clear the selection
+  const handleLeaveGroup = async () => {
+    if (!selectedConversation?.isGroup || leaving) return
+    setLeaving(true)
+    try {
+      await api.post(`/messages/groups/${selectedConversation._id}/leave`)
+      setSelectedConversation(null)
+      fetchConversations()
+    } catch (err: any) {
+      console.error('Failed to leave group', err)
+    } finally {
+      setLeaving(false)
+    }
+  }
+
   // Listen for read/delivered receipts so our sent messages show ✓ / ✓✓
   useEffect(() => {
     const handleReceipt = (data: any) => {
@@ -303,7 +371,17 @@ export default function MessagesPage() {
         <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 border-b border-gray-800 p-4">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-white">Messages</h1>
-            {connected && <span className="w-2 h-2 bg-green-500 rounded-full" title="Connected" />}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowCreateGroup(true)}
+                className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                title="Create a group chat"
+              >
+                <FaUsers size={14} />
+                <FaPlus size={12} />
+              </button>
+              {connected && <span className="w-2 h-2 bg-green-500 rounded-full" title="Connected" />}
+            </div>
           </div>
         </div>
 
@@ -325,10 +403,20 @@ export default function MessagesPage() {
                 selectedConversation?._id === conv._id ? 'bg-gray-900' : ''
               }`}
             >
-              <Avatar src={conv.participant?.avatar} name={conv.participant?.displayName || 'Unknown'} />
+              <div className="relative flex-shrink-0">
+                <Avatar
+                  src={conversationAvatar(conv)}
+                  name={conversationTitle(conv)}
+                />
+                {conv.isGroup && (
+                  <span className="absolute -bottom-1 -right-1 bg-gray-800 border border-black rounded-full p-0.5">
+                    <FaUsers size={9} className="text-blue-400" />
+                  </span>
+                )}
+              </div>
               <div className="flex-1 min-w-0 text-left">
                 <div className="flex items-center justify-between">
-                  <p className="font-semibold truncate text-white">{conv.participant?.displayName || 'Unknown'}</p>
+                  <p className="font-semibold truncate text-white">{conversationTitle(conv)}</p>
                   {conv.lastMessage && (
                     <span className="text-xs text-gray-500">
                       {formatMessageTime(conv.lastMessage?.createdAt)}
@@ -361,23 +449,98 @@ export default function MessagesPage() {
               >
                 <FaArrowLeft size={20} />
               </button>
-              <Avatar src={selectedConversation.participant?.avatar} name={selectedConversation.participant?.displayName || 'Unknown'} />
-              <div>
-                <p className="font-semibold text-white">{selectedConversation.participant.displayName}</p>
-                <p className="text-sm text-gray-500">
-                  {typingUsers.size > 0 ? (
-                    <span className="text-blue-400">typing...</span>
+              <div className="relative flex-shrink-0">
+                <Avatar
+                  src={conversationAvatar(selectedConversation)}
+                  name={conversationTitle(selectedConversation)}
+                />
+                {selectedConversation.isGroup && (
+                  <span className="absolute -bottom-1 -right-1 bg-gray-800 border border-black rounded-full p-0.5">
+                    <FaUsers size={9} className="text-blue-400" />
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <button
+                  onClick={() =>
+                    selectedConversation.isGroup && setShowMembers((v) => !v)
+                  }
+                  disabled={!selectedConversation.isGroup}
+                  className="text-left w-full"
+                >
+                  <p className="font-semibold text-white flex items-center gap-1.5">
+                    {conversationTitle(selectedConversation)}
+                    {selectedConversation.isGroup && (
+                      <FaUsers size={12} className="text-gray-500" />
+                    )}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {typingUsers.size > 0 ? (
+                      <span className="text-blue-400">
+                        {selectedConversation.isGroup && typingUsers.size > 1
+                          ? `${typingUsers.size} people are typing...`
+                        : 'typing...'}
+                    </span>
+                  ) : selectedConversation.isGroup ? (
+                    `${selectedConversation.participants?.length || 0} members`
                   ) : (
                     `@${selectedConversation.participant?.username || ''}`
                   )}
-                </p>
+                  </p>
+                </button>
               </div>
+              {selectedConversation.isGroup && (
+                <button
+                  onClick={handleLeaveGroup}
+                  disabled={leaving}
+                  className="text-gray-500 hover:text-red-400 transition-colors p-2"
+                  title="Leave group"
+                >
+                  <FaSignOutAlt size={16} />
+                </button>
+              )}
             </div>
+
+            {/* Group members panel */}
+            {selectedConversation.isGroup && showMembers && (
+              <div className="border-b border-gray-800 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-gray-300">
+                    Members ({selectedConversation.participants?.length || 0})
+                  </p>
+                  <button
+                    onClick={() => setShowMembers(false)}
+                    className="text-gray-500 hover:text-white text-sm"
+                  >
+                    Hide
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedConversation.participants?.map((p) => (
+                    <span
+                      key={p._id}
+                      className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-full pl-1 pr-3 py-1"
+                    >
+                      <Avatar src={p.avatar} name={p.displayName} size="sm" />
+                      <span className="text-sm text-white">{p.displayName}</span>
+                      {selectedConversation.admin?.includes(p._id) && (
+                        <span className="text-[10px] uppercase tracking-wide text-blue-400 font-semibold">
+                          admin
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((msg) => {
                 const isOwn = getSenderId(msg.sender) === user?._id
+                const senderUser = typeof msg.sender === 'object' ? msg.sender : undefined
+                const showSenderName =
+                  selectedConversation.isGroup && !isOwn && senderUser !== undefined
                 return (
                   <div key={msg._id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                     <div
@@ -387,6 +550,11 @@ export default function MessagesPage() {
                           : 'bg-gray-800 text-white border border-gray-700'
                       }`}
                     >
+                      {showSenderName && (
+                        <p className="text-xs font-semibold text-blue-300 mb-0.5">
+                          {senderUser?.displayName || 'Unknown'}
+                        </p>
+                      )}
                       <p>{msg.content}</p>
                       <div
                         className={`flex items-center justify-end gap-1.5 mt-1 text-xs ${
@@ -444,6 +612,13 @@ export default function MessagesPage() {
           </div>
         )}
       </div>
+
+      {showCreateGroup && (
+        <CreateGroupModal
+          onClose={() => setShowCreateGroup(false)}
+          onSuccess={() => fetchConversations()}
+        />
+      )}
     </div>
   )
 }
