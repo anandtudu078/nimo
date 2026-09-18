@@ -13,9 +13,10 @@ import {
   FaArrowLeft,
   FaUsers,
   FaPlus,
-  FaSignOutAlt,
+  FaCog,
 } from 'react-icons/fa'
 import CreateGroupModal from '../components/CreateGroupModal'
+import GroupSettingsModal from '../components/GroupSettingsModal'
 
 interface MessageParticipant {
   _id: string
@@ -100,7 +101,7 @@ export default function MessagesPage() {
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
-  const [leaving, setLeaving] = useState(false)
+  const [showGroupSettings, setShowGroupSettings] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const pendingConversationRef = useRef<{ conversationId: string; participant: MessageParticipant } | null>(null)
@@ -202,15 +203,20 @@ export default function MessagesPage() {
   }, [selectedConversation, onUserTyping, onUserTypingStop, user?._id])
 
   // Realtime group membership: refresh the list when a new group reaches us,
-  // and update the open chat's participant list when members change.
+  // update the open chat's name/participants when they change, and drop
+  // conversations the user was removed from.
   useEffect(() => {
     const onGroupCreated = () => fetchConversations()
     const onGroupUpdated = (data: any) => {
       if (selectedConversation && data.conversationId === selectedConversation._id) {
         setConversations((prev) =>
           prev.map((c) =>
-            c._id === data.conversationId && data.participants
-              ? { ...c, participants: data.participants }
+            c._id === data.conversationId
+              ? {
+                  ...c,
+                  groupName: data.groupName ?? c.groupName,
+                  participants: data.participants ?? c.participants,
+                }
               : c
           )
         )
@@ -218,11 +224,19 @@ export default function MessagesPage() {
         fetchConversations()
       }
     }
+    const onGroupRemoved = (data: any) => {
+      setConversations((prev) => prev.filter((c) => c._id !== data.conversationId))
+      setSelectedConversation((current) =>
+        current?._id === data.conversationId ? null : current
+      )
+    }
     socket?.on('group_created', onGroupCreated)
     socket?.on('group_updated', onGroupUpdated)
+    socket?.on('group_removed', onGroupRemoved)
     return () => {
       socket?.off('group_created', onGroupCreated)
       socket?.off('group_updated', onGroupUpdated)
+      socket?.off('group_removed', onGroupRemoved)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversation])
@@ -337,19 +351,27 @@ export default function MessagesPage() {
     }, 2000)
   }, [selectedConversation, startTyping, stopTyping])
 
-  // Leave the currently open group and clear the selection
-  const handleLeaveGroup = async () => {
-    if (!selectedConversation?.isGroup || leaving) return
-    setLeaving(true)
-    try {
-      await api.post(`/messages/groups/${selectedConversation._id}/leave`)
-      setSelectedConversation(null)
-      fetchConversations()
-    } catch (err: any) {
-      console.error('Failed to leave group', err)
-    } finally {
-      setLeaving(false)
-    }
+  // Apply a settings-modal mutation (rename / add / remove) to local state
+  const handleGroupUpdated = (conversation: any) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c._id === conversation._id
+          ? {
+              ...c,
+              groupName: conversation.groupName,
+              groupAvatar: conversation.groupAvatar,
+              admin: conversation.admin?.map((a: any) => a.toString()),
+              participants: conversation.participants,
+            }
+          : c
+      )
+    )
+  }
+
+  // Leave/remove flows triggered from inside the settings modal
+  const handleExitedGroup = () => {
+    setSelectedConversation(null)
+    fetchConversations()
   }
 
   // Listen for read/delivered receipts so our sent messages show ✓ / ✓✓
@@ -491,12 +513,11 @@ export default function MessagesPage() {
               </div>
               {selectedConversation.isGroup && (
                 <button
-                  onClick={handleLeaveGroup}
-                  disabled={leaving}
-                  className="text-gray-500 hover:text-red-400 transition-colors p-2"
-                  title="Leave group"
+                  onClick={() => setShowGroupSettings(true)}
+                  className="text-gray-500 hover:text-white transition-colors p-2"
+                  title="Group settings"
                 >
-                  <FaSignOutAlt size={16} />
+                  <FaCog size={16} />
                 </button>
               )}
             </div>
@@ -617,6 +638,19 @@ export default function MessagesPage() {
         <CreateGroupModal
           onClose={() => setShowCreateGroup(false)}
           onSuccess={() => fetchConversations()}
+        />
+      )}
+
+      {selectedConversation?.isGroup && showGroupSettings && (
+        <GroupSettingsModal
+          conversationId={selectedConversation._id}
+          groupName={selectedConversation.groupName || 'Group'}
+          adminIds={selectedConversation.admin || []}
+          participants={selectedConversation.participants || []}
+          currentUserId={user?._id || ''}
+          onClose={() => setShowGroupSettings(false)}
+          onUpdated={handleGroupUpdated}
+          onLeft={handleExitedGroup}
         />
       )}
     </div>

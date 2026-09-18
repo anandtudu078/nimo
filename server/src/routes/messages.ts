@@ -486,6 +486,93 @@ router.post('/groups/:conversationId/members', auth, async (req: AuthRequest, re
   }
 })
 
+// Admin renames a group
+router.put('/groups/:conversationId', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const conversation = await getConversationForUser(req.params.conversationId, req.userId)
+    if (!conversation || !conversation.isGroup) {
+      return res.status(404).json({ message: 'Group not found' })
+    }
+    if (!isAdmin(conversation, req.userId!)) {
+      return res.status(403).json({ message: 'Only group admins can rename the group' })
+    }
+
+    const { name } = req.body as { name?: unknown }
+    const groupName = typeof name === 'string' ? name.trim() : ''
+    if (!groupName || groupName.length > 50) {
+      return res.status(400).json({ message: 'Group name must be 1-50 characters' })
+    }
+
+    conversation.groupName = groupName
+    await conversation.save()
+
+    // Tell the other members so their headers and list titles update
+    const io = req.app.get('io')
+    conversation.participants.forEach((p: any) => {
+      const pid = p._id ? p._id.toString() : p.toString()
+      if (pid !== req.userId) {
+        emitToUser(io, pid, 'group_updated', {
+          conversationId: conversation._id,
+          groupName,
+        })
+      }
+    })
+
+    res.json({ conversation })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to rename group' })
+  }
+})
+
+// Admin removes a member from a group
+router.delete('/groups/:conversationId/members/:userId', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const conversation = await getConversationForUser(req.params.conversationId, req.userId)
+    if (!conversation || !conversation.isGroup) {
+      return res.status(404).json({ message: 'Group not found' })
+    }
+    if (!isAdmin(conversation, req.userId!)) {
+      return res.status(403).json({ message: 'Only group admins can remove members' })
+    }
+
+    const userId = String(req.params.userId)
+    if (userId === req.userId) {
+      return res.status(400).json({ message: 'Use leave group instead of removing yourself' })
+    }
+    if (isAdmin(conversation, userId)) {
+      return res.status(403).json({ message: 'Admins cannot remove other admins' })
+    }
+    const wasMember = conversation.participants.some((p: any) => p.toString() === userId)
+    if (!wasMember) {
+      return res.status(404).json({ message: 'User is not a member of this group' })
+    }
+
+    conversation.participants = conversation.participants.filter(
+      (p: any) => p.toString() !== userId
+    )
+    await conversation.save()
+    await conversation.populate('participants', 'username displayName avatar')
+
+    const io = req.app.get('io')
+    // The removed user drops the conversation from their list entirely
+    emitToUser(io, userId, 'group_removed', { conversationId: conversation._id })
+    // Remaining members refresh the participant list
+    conversation.participants.forEach((p: any) => {
+      const pid = p._id ? p._id.toString() : p.toString()
+      if (pid !== req.userId) {
+        emitToUser(io, pid, 'group_updated', {
+          conversationId: conversation._id,
+          participants: conversation.participants,
+        })
+      }
+    })
+
+    res.json({ conversation })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to remove member' })
+  }
+})
+
 // Leave a group (creator/admin can leave too — group survives without admins)
 router.post('/groups/:conversationId/leave', auth, async (req: AuthRequest, res: Response) => {
   try {
