@@ -3,6 +3,7 @@ import { Router, Response } from 'express'
 import EmailVerification from '../models/EmailVerification'
 import User from '../models/User'
 import { auth, AuthRequest } from '../middleware/auth'
+import { sendVerificationEmail } from '../config/mailer'
 
 // Store only a hash of verification tokens — a DB leak alone must not yield
 // a usable verification token.
@@ -33,10 +34,12 @@ router.post('/send', auth, async (req: AuthRequest, res: Response) => {
       expiresAt,
     })
 
-    // TODO: Send verification email
-    // For now, log the verification URL
+    // Send verification email (falls back to console logging in dev)
     const verifyUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/verify-email?token=${token}`
-    console.log(`[Email Verification] ${user.email}: ${verifyUrl}`)
+    const sent = await sendVerificationEmail(user.email, verifyUrl)
+    if (!sent) {
+      console.log(`[Email Verification] SMTP unavailable — link for ${user.email}: ${verifyUrl}`)
+    }
 
     res.json({ message: 'Verification email sent' })
   } catch (error: any) {

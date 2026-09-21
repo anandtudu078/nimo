@@ -78,8 +78,15 @@ PORT=5000
 MONGODB_URI=mongodb://localhost:27017/nimo
 JWT_SECRET=your-super-secret-jwt-key
 CLIENT_URL=http://localhost:5173
-```
 
+# Optional — transactional email (password reset & email verification).
+# When unset, emails are logged to the server console instead of being sent.
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=you@gmail.com
+SMTP_PASS=your-app-password
+MAIL_FROM="Nimo <no-reply@nimo.app>"
+```
 ### 3. Start Development Servers
 
 ```bash

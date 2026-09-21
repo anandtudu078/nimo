@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { Router, Request, Response } from 'express'
 import User from '../models/User'
+import { sendPasswordResetEmail } from '../config/mailer'
 
 // Store only a hash of reset/verification tokens — a DB leak alone must not
 // yield working credentials.
@@ -108,10 +109,12 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       expiresAt,
     })
 
-    // TODO: Send email with reset link
-    // For now, log the reset URL to console
+    // Send reset link via email (falls back to console logging in dev)
     const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${token}`
-    console.log(`[Password Reset] ${user.email}: ${resetUrl}`)
+    const sent = await sendPasswordResetEmail(user.email, resetUrl)
+    if (!sent) {
+      console.log(`[Password Reset] SMTP unavailable — link for ${user.email}: ${resetUrl}`)
+    }
 
     res.json({ message: 'If an account exists with that email, a reset link has been sent.' })
   } catch (error: any) {
