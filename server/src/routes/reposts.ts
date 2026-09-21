@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import mongoose from 'mongoose'
 import Repost from '../models/Repost'
 import Post from '../models/Post'
 import Notification from '../models/Notification'
@@ -48,6 +49,10 @@ router.post('/:postId', auth, async (req: AuthRequest, res: Response) => {
 // Check if current user reposted a specific post
 router.get('/check/:postId', auth, async (req: AuthRequest, res: Response) => {
   try {
+    // Reject non-ObjectId params early ("check-multiple", garbage) instead of a 500 CastError
+    if (!mongoose.isValidObjectId(req.params.postId)) {
+      return res.json({ reposted: false })
+    }
     const existing = await Repost.findOne({ user: req.userId, originalPost: req.params.postId })
     res.json({ reposted: !!existing })
   } catch (error: any) {
@@ -55,7 +60,10 @@ router.get('/check/:postId', auth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// Check multiple posts for repost status
+// Check multiple posts for repost status — one request per feed page instead
+// of one per card. A batch route with a bare path segment can't collide with
+// GET /check/:postId or GET /:postId (different method + shape), but it must
+// stay declared before GET /:postId so "check-multiple" is never parsed as an id.
 router.post('/check-multiple', auth, async (req: AuthRequest, res: Response) => {
   try {
     const { postIds } = req.body
