@@ -1,0 +1,22 @@
+# Railway deployment configuration.
+#
+# The repo has a root Dockerfile that builds the TypeScript server
+# (builder stage compiles with dev deps, production stage runs
+# `node dist/index.js` with prod-only deps). Pinning the builder here
+# removes any ambiguity from auto-detection — without it, Railway may
+# treat the repo root as a plain Node project and run `npm run build`
+# against the workspace root package.json, which has no build script
+# ("Deployment failed" right after install).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node dist/index.js"
+# The server binds its port only after MongoDB connects (with retries),
+# so give the healthcheck enough room for a cold start.
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

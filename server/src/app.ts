@@ -1,5 +1,6 @@
 import express from 'express'
 import cookieParser from 'cookie-parser'
+import mongoose from 'mongoose'
 import dotenv from 'dotenv'
 import authRoutes from './routes/auth'
 import postRoutes from './routes/posts'
@@ -91,9 +92,14 @@ app.use('/api/reposts', apiLimiter, repostRoutes)
 app.use('/api/views', apiLimiter, viewRoutes)
 app.use('/api/connections', apiLimiter, connectionRoutes)
 
-// Health check
+// Health check — always 200 so the platform healthcheck passes as soon as
+// the port is up; `database` tells monitoring whether Mongo has connected.
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  res.json({
+    status: 'ok',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'connecting',
+    timestamp: new Date().toISOString(),
+  })
 })
 
 
