@@ -9,6 +9,16 @@ export const apiLimiter = rateLimit({
   message: { message: 'Too many requests, please try again later.' },
 })
 
+// Current-user lookup: called once per app load, so it must not share the
+// strict 10/min auth budget (a 429 here would spuriously log people out).
+export const meLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests, please try again later.' },
+})
+
 // Auth rate limit: 10 requests per minute per IP (stricter for login/register)
 export const authLimiter = rateLimit({
   windowMs: 60 * 1000,

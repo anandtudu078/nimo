@@ -101,7 +101,10 @@ app.get('/api/health', (_req, res) => {
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[Global Error]', err.message || err)
   const statusCode = err.statusCode || err.status || 500
-  res.status(statusCode).json({ message: err.message || 'Internal server error' })
+  // Don't leak internal error details for unexpected 500s; client-caught
+  // errors (4xx) keep their real message.
+  const message = statusCode >= 500 ? 'Internal server error' : err.message || 'Request failed'
+  res.status(statusCode).json({ message })
 })
 
 export default app

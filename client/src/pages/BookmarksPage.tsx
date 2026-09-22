@@ -5,12 +5,15 @@ import ErrorState from '../components/ErrorState'
 import { getErrorMessage } from '../utils/errors'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useFeedStatuses } from '../utils/postStatus'
 import type { Post } from '../types'
 import { FaBookmark } from 'react-icons/fa'
 
 export default function BookmarksPage() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<Post[]>([])
+  // Batched status for the bookmark list (bookmarks themselves come from the API)
+  const { statusMap, bookmarkedIds } = useFeedStatuses(posts.map((p) => p._id), posts.length > 0)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -63,7 +66,13 @@ export default function BookmarksPage() {
           </div>
         ) : (
           posts.map((post) => (
-            <PostCard key={post._id} post={post} onDelete={handleDeletePost} />
+            <PostCard
+              key={post._id}
+              post={post}
+              onDelete={handleDeletePost}
+              statusMap={statusMap}
+              bookmarkStatusMap={bookmarkedIds}
+            />
           ))
         )}
       </div>

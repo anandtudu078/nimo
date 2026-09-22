@@ -7,6 +7,7 @@ import Avatar from '../components/Avatar'
 import PollCreator, { type PollData } from '../components/PollCreator'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useFeedStatuses } from '../utils/postStatus'
 import type { Post } from '../types'
 import { FaImage, FaTimes, FaSpinner, FaPollH } from 'react-icons/fa'
 
@@ -24,6 +25,12 @@ export default function FeedPage() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<FeedTab>('foryou')
+
+  // One batched status + bookmark fetch per feed page instead of per card
+  const { statusMap, bookmarkedIds } = useFeedStatuses(
+    posts.map((p) => p._id),
+    posts.length > 0
+  )
 
   // Poll state
   const [showPollCreator, setShowPollCreator] = useState(false)
@@ -313,6 +320,8 @@ export default function FeedPage() {
               onDelete={handleDeletePost}
               onEdit={handleEditPost}
               onQuote={handleQuoteCreated}
+              statusMap={statusMap}
+              bookmarkStatusMap={bookmarkedIds}
             />
           ))}
         </div>

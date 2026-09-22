@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import mongoose from 'mongoose'
 import User from '../models/User'
 import Post from '../models/Post'
 import Notification from '../models/Notification'
@@ -147,7 +148,14 @@ router.put('/me', auth, async (req: AuthRequest, res: Response) => {
     if (website !== undefined) updateData.website = website
     if (avatar !== undefined) updateData.avatar = avatar
     if (profileBanner !== undefined) updateData.profileBanner = profileBanner
-    if (studyYear !== undefined) updateData.studyYear = studyYear
+    // Schema has no maxlength for studyYear — reject oversized values here
+    // instead of persisting arbitrarily long strings.
+    if (studyYear !== undefined) {
+      if (typeof studyYear !== 'string' || studyYear.length > 20) {
+        return res.status(400).json({ message: 'studyYear must be a string of at most 20 characters' })
+      }
+      updateData.studyYear = studyYear
+    }
     const user = await User.findByIdAndUpdate(
       req.userId,
       updateData,
@@ -261,9 +269,24 @@ router.get('/username/:username', auth, async (req: AuthRequest, res: Response) 
   }
 })
 
+// Has the viewer blocked :userId? (drives the profile page's Block/Unblock state)
+router.get('/:userId/block-status', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.userId).select('blockedUsers')
+    const blocked = !!user?.blockedUsers.some((id) => id.toString() === req.params.userId)
+    res.json({ blocked })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to get block status' })
+  }
+})
+
 // Get user profile (with pinned post populated)
 router.get('/:userId', auth, async (req: AuthRequest, res: Response) => {
   try {
+    // Garbage ids would cast-error below; return 404 like the client expects
+    if (!mongoose.isValidObjectId(req.params.userId)) {
+      return res.status(404).json({ message: 'User not found' })
+    }
     // Explicit public allowlist — a denylist ('-password') previously leaked
     // email, push tokens, bookmarks, and mute/block lists of ANY user.
     const publicFields =

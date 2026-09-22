@@ -35,10 +35,18 @@ router.post('/', auth, async (req: AuthRequest, res: Response) => {
     )
 
     // Build image metadata with order and optional alt text
-    const alts = req.body.alts ? JSON.parse(req.body.alts) : []
+    let alts: unknown[] = []
+    if (req.body.alts) {
+      try {
+        const parsed = JSON.parse(req.body.alts)
+        if (Array.isArray(parsed)) alts = parsed
+      } catch {
+        return res.status(400).json({ message: 'alts must be a JSON array' })
+      }
+    }
     const imageMeta = urls.map((url, i) => ({
       url,
-      alt: alts[i] || '',
+      alt: typeof alts[i] === 'string' ? alts[i] : '',
       order: i,
     }))
 

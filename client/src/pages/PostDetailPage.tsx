@@ -152,6 +152,12 @@ export default function PostDetailPage() {
           .get(`/reposts/check/${postId}`)
           .then((r) => setReposted(r.data.reposted))
           .catch(() => {})
+
+        // Fetch bookmark state so the button reflects reality on load
+        api
+          .post('/posts/check-bookmarks', { postIds: [postId] })
+          .then((r) => setBookmarked(!!r.data?.bookmarkedPostIds?.includes(postId)))
+          .catch(() => {})
       }
 
       // Fetch reactions

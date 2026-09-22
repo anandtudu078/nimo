@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import mongoose from 'mongoose'
 import Poll from '../models/Poll'
 import Post from '../models/Post'
 import Notification from '../models/Notification'
@@ -10,6 +11,9 @@ const router = Router()
 router.post('/:postId', auth, async (req: AuthRequest, res: Response) => {
   try {
     const { postId } = req.params
+    if (!mongoose.isValidObjectId(postId)) {
+      return res.status(404).json({ message: 'Post not found' })
+    }
     const { options, durationHours } = req.body
 
     const post = await Post.findById(postId)
@@ -49,6 +53,9 @@ router.post('/:postId', auth, async (req: AuthRequest, res: Response) => {
 // Get poll for a post
 router.get('/:postId', auth, async (req: AuthRequest, res: Response) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.postId)) {
+      return res.status(404).json({ message: 'Poll not found' })
+    }
     const poll = await Poll.findOne({ post: req.params.postId })
     if (!poll) return res.status(404).json({ message: 'Poll not found' })
 
@@ -71,6 +78,9 @@ router.get('/:postId', auth, async (req: AuthRequest, res: Response) => {
 router.post('/:postId/vote', auth, async (req: AuthRequest, res: Response) => {
   try {
     const { optionIndex } = req.body
+    if (!mongoose.isValidObjectId(req.params.postId)) {
+      return res.status(404).json({ message: 'Poll not found' })
+    }
     const poll = await Poll.findOne({ post: req.params.postId })
     if (!poll) return res.status(404).json({ message: 'Poll not found' })
 

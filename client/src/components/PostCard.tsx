@@ -35,6 +35,8 @@ interface PostCardProps {
   statusMap?: Record<string, { reposted: boolean; reaction: string | null }>
   /** Bump to make cards re-check their viewer status (call after repost/reaction toggles) */
   statusRefreshKey?: number
+  /** Bookmarked-post ids for the enclosing list (batched: 1 request per page) */
+  bookmarkStatusMap?: Set<string>
 }
 
 // Must match VALID_EMOJIS in server/src/routes/reactions.ts
@@ -95,7 +97,7 @@ function RichText({ content }: { content: string }) {
   )
 }
 
-export default function PostCard({ post, onDelete, onEdit, onQuote, statusMap, statusRefreshKey = 0, onViewerStatusChange }: PostCardProps) {
+export default function PostCard({ post, onDelete, onEdit, onQuote, statusMap, statusRefreshKey = 0, onViewerStatusChange, bookmarkStatusMap }: PostCardProps) {
   const { user } = useAuth()
   const [liked, setLiked] = useState(post.likes.includes(user?._id || ''))
   const [likeCount, setLikeCount] = useState(post.likes.length)
@@ -106,7 +108,10 @@ export default function PostCard({ post, onDelete, onEdit, onQuote, statusMap, s
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(post.content)
   const [editSaving, setEditSaving] = useState(false)
-  const [bookmarked, setBookmarked] = useState(false)
+  // Initial bookmark state comes from the enclosing list's batched map when
+  // provided — otherwise it stays unknown (false) until the user toggles it,
+  // since loading it per-card would cost one request per card.
+  const [bookmarked, setBookmarked] = useState(bookmarkStatusMap?.has(post._id) ?? false)
   const [showMenu, setShowMenu] = useState(false)
   const [showReport, setShowReport] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
@@ -124,6 +129,11 @@ export default function PostCard({ post, onDelete, onEdit, onQuote, statusMap, s
   const [showQuoteModal, setShowQuoteModal] = useState(false)
 
   const { reposted, reaction: userReaction } = usePostCardStatus(post._id, statusMap, statusRefreshKey)
+
+  // Track the list's batched bookmark map (e.g. after it refetches)
+  useEffect(() => {
+    if (bookmarkStatusMap) setBookmarked(bookmarkStatusMap.has(post._id))
+  }, [bookmarkStatusMap, post._id])
   const setReposted = (updater: boolean | ((prev: boolean) => boolean)) => {
     onViewerStatusChange?.((prev) => ({
       ...prev,
@@ -224,29 +234,6 @@ export default function PostCard({ post, onDelete, onEdit, onQuote, statusMap, s
     }
   }
 
-  // Load reaction counts and user reaction
-  useEffect(() => {
-    let mounted = true
-    api
-      .get(`/reactions/${post._id}`)
-      .then((res) => {
-        if (!mounted) return
-        const grouped = res.data.reactions as Record<string, { _id: string }[]>
-        const counts: Record<string, number> = {}
-        let own: string | null = null
-        for (const [emoji, users] of Object.entries(grouped)) {
-          counts[emoji] = users.length
-          if (users.some((u) => u._id === user?._id)) own = emoji
-        }
-        setReactionCounts(counts)
-        setUserReaction(own)
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [post._id, user?._id])
-
   const handleReact = async (emoji: string) => {
     setShowReactionPicker(false)
     try {
@@ -257,6 +244,12 @@ export default function PostCard({ post, onDelete, onEdit, onQuote, statusMap, s
       console.error('Failed to react to post')
     }
   }
+
+  // Load reaction counts. NOTE: this intentionally does NOT decide the
+  // viewer's own reaction — that comes from usePostCardStatus (batched map
+  // or solo fetch), which also hits GET /reactions/:id. Fetching it here as
+  // well would double every card's request count, which is exactly the
+  // rate-limit problem the batching feature exists to fix.
 
   const handleCancelEdit = () => {
     setIsEditing(false)

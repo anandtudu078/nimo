@@ -68,6 +68,9 @@ router.put('/:id', auth, adminAuth, async (req: AuthRequest, res: Response) => {
     if (!['pending', 'reviewed', 'resolved'].includes(status)) {
       return res.status(400).json({ message: 'Invalid status' })
     }
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ message: 'Report not found' })
+    }
     const report = await Report.findByIdAndUpdate(req.params.id, { status }, { new: true })
     if (!report) return res.status(404).json({ message: 'Report not found' })
     res.json({ report })
