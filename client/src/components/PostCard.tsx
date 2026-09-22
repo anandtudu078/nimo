@@ -20,6 +20,7 @@ import QuoteModal from './QuoteModal'
 import { formatDistanceToNow } from 'date-fns'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { usePostCardStatus } from '../utils/postStatus'
 import Avatar from './Avatar'
 import type { Post, Poll } from '../types'
 
@@ -28,6 +29,12 @@ interface PostCardProps {
   onDelete?: (id: string) => void
   onEdit?: (id: string, data: { content: string; images: string[] }) => void
   onQuote?: (post: Post) => void
+  /** Lets PostCard push viewer-status changes (repost/reaction toggles) back into the list's shared map */
+  onViewerStatusChange?: React.Dispatch<React.SetStateAction<Record<string, { reposted: boolean; reaction: string | null }>>>
+  /** Viewer status map for the enclosing list (batched: 2 requests per page instead of 2 per card) */
+  statusMap?: Record<string, { reposted: boolean; reaction: string | null }>
+  /** Bump to make cards re-check their viewer status (call after repost/reaction toggles) */
+  statusRefreshKey?: number
 }
 
 // Must match VALID_EMOJIS in server/src/routes/reactions.ts
@@ -88,7 +95,7 @@ function RichText({ content }: { content: string }) {
   )
 }
 
-export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardProps) {
+export default function PostCard({ post, onDelete, onEdit, onQuote, statusMap, statusRefreshKey = 0, onViewerStatusChange }: PostCardProps) {
   const { user } = useAuth()
   const [liked, setLiked] = useState(post.likes.includes(user?._id || ''))
   const [likeCount, setLikeCount] = useState(post.likes.length)
@@ -104,34 +111,31 @@ export default function PostCard({ post, onDelete, onEdit, onQuote }: PostCardPr
   const [showReport, setShowReport] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
   const [reactionCounts, setReactionCounts] = useState<Record<string, number>>({})
-  const [userReaction, setUserReaction] = useState<string | null>(null)
   const [showReactionPicker, setShowReactionPicker] = useState(false)
 
   // Poll state
   const [poll, setPoll] = useState<Poll | undefined>(post.poll)
 
-  // Repost / Quote state
-  const [reposted, setReposted] = useState(false)
+  // Repost / Quote state — initial viewer status comes from the batched map
+  // (or a solo fetch when no map was provided) via the shared hook below.
   const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [shareCount, setShareCount] = useState(post.shareCount || 0)
   const [showRepostMenu, setShowRepostMenu] = useState(false)
   const [showQuoteModal, setShowQuoteModal] = useState(false)
 
-  // Check repost status on mount
-  useEffect(() => {
-    let mounted = true
-    if (user?._id && post._id) {
-      api
-        .get(`/reposts/check/${post._id}`)
-        .then((res) => {
-          if (mounted) setReposted(res.data.reposted)
-        })
-        .catch(() => {})
-    }
-    return () => {
-      mounted = false
-    }
-  }, [post._id, user?._id])
+  const { reposted, reaction: userReaction } = usePostCardStatus(post._id, statusMap, statusRefreshKey)
+  const setReposted = (updater: boolean | ((prev: boolean) => boolean)) => {
+    onViewerStatusChange?.((prev) => ({
+      ...prev,
+      [post._id]: { reposted: typeof updater === 'function' ? updater(prev[post._id]?.reposted ?? false) : updater, reaction: prev[post._id]?.reaction ?? null },
+    }))
+  }
+  const setUserReaction = (updater: string | null | ((prev: string | null) => string | null)) => {
+    onViewerStatusChange?.((prev) => ({
+      ...prev,
+      [post._id]: { reposted: prev[post._id]?.reposted ?? false, reaction: typeof updater === 'function' ? updater(prev[post._id]?.reaction ?? null) : updater },
+    }))
+  }
 
   const handleLike = async () => {
     try {

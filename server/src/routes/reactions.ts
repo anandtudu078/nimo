@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import mongoose from 'mongoose'
 import Reaction from '../models/Reaction'
 import Post from '../models/Post'
 import Notification from '../models/Notification'
@@ -8,6 +9,37 @@ import { auth, AuthRequest } from '../middleware/auth'
 const router = Router()
 
 const VALID_EMOJIS = ['❤️', '🔥', '😂', '😮', '😢', '👍']
+
+// Batch: which of the given posts has the caller reacted to, and with which
+// emoji? Feed pages call this once per page instead of once per card, so a
+// 20-post feed costs 1 request instead of 20. Must be declared before
+// GET /:postId, otherwise "check-multiple" is captured as a :postId param.
+router.post('/check-multiple', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { postIds } = req.body as { postIds?: unknown }
+    if (!Array.isArray(postIds) || postIds.length === 0) {
+      return res.json({ reactions: {} })
+    }
+    // Only accept well-formed ObjectIds; anything else is ignored rather
+    // than letting a bad value cast-error the whole query.
+    const validIds = postIds.filter((id) => typeof id === 'string' && mongoose.isValidObjectId(id))
+    if (validIds.length === 0) {
+      return res.json({ reactions: {} })
+    }
+    if (validIds.length > 200) {
+      return res.status(400).json({ message: 'Too many postIds (max 200)' })
+    }
+
+    const mine = await Reaction.find({ user: req.userId, post: { $in: validIds } }).select('post emoji')
+    const reactions: Record<string, string> = {}
+    for (const r of mine) {
+      reactions[r.post.toString()] = r.emoji
+    }
+    res.json({ reactions })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to check reactions' })
+  }
+})
 
 // Toggle reaction on a post
 router.post('/:postId', auth, async (req: AuthRequest, res: Response) => {
