@@ -20,7 +20,7 @@ import QuoteModal from './QuoteModal'
 import { formatDistanceToNow } from 'date-fns'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchPostStatuses, usePostCardStatus } from '../utils/postStatus'
+import { usePostCardStatus } from '../utils/postStatus'
 import Avatar from './Avatar'
 import type { Post, Poll } from '../types'
 
@@ -258,28 +258,7 @@ export default function PostCard({ post, onDelete, onEdit, onQuote, statusMap, s
     }
   }
 
-  // Load reaction counts and user reaction
-  useEffect(() => {
-    let mounted = true
-    api
-      .get(`/reactions/${post._id}`)
-      .then((res) => {
-        if (!mounted) return
-        const grouped = res.data.reactions as Record<string, { _id: string }[]>
-        const counts: Record<string, number> = {}
-        let own: string | null = null
-        for (const [emoji, users] of Object.entries(grouped)) {
-          counts[emoji] = users.length
-          if (users.some((u) => u._id === user?._id)) own = emoji
-        }
-        setReactionCounts(counts)
-        setUserReaction(own)
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [post._id, user?._id])
+  const handleCancelEdit = () => {
     setIsEditing(false)
     setEditContent(post.content)
   }
