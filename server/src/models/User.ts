@@ -43,7 +43,7 @@ const userSchema = new Schema<IUser>(
     // Bumped on password change/reset to invalidate all previously issued JWTs
     tokenVersion: { type: Number, default: 0, select: false },
     fcmTokens: [{ type: String }],
-    studyYear: { type: String, default: '' },
+    studyYear: { type: String, default: '', maxlength: 20 },
     followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     following: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     bookmarks: [{ type: Schema.Types.ObjectId, ref: 'Post' }],

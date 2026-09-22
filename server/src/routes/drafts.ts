@@ -1,7 +1,15 @@
 import { Router, Response } from 'express'
 import Draft from '../models/Draft'
 import Post from '../models/Post'
+import Hashtag from '../models/Hashtag'
 import { auth, AuthRequest } from '../middleware/auth'
+import { checkContent } from '../middleware/spamFilter'
+
+// Same hashtag bookkeeping as posts.ts so trending counts stay consistent
+function extractHashtags(text: string): string[] {
+  const matches = text.match(/#\w+/g)
+  return matches ? [...new Set(matches.map((h) => h.slice(1).toLowerCase()))] : []
+}
 
 const router = Router()
 
@@ -74,14 +82,38 @@ router.post('/:id/publish', auth, async (req: AuthRequest, res: Response) => {
     const draft = await Draft.findOne({ _id: req.params.id, author: req.userId })
     if (!draft) return res.status(404).json({ message: 'Draft not found' })
 
+    // Same validation as POST /posts — schema maxlength truncates silently,
+    // and the spam filter must apply to drafts too, not just the composer.
+    const content = (draft.content || '').trim()
+    const images = Array.isArray(draft.images) ? draft.images : []
+    if (!content && images.length === 0) {
+      return res.status(400).json({ message: 'Draft is empty' })
+    }
+    if (content.length > 280) {
+      return res.status(400).json({ message: 'Post content must be 280 characters or fewer' })
+    }
+    if (checkContent(content).isSpam) {
+      return res.status(400).json({ message: 'Content flagged as potential spam' })
+    }
+
     // Create post from draft
     const post = new Post({
       author: req.userId,
-      content: draft.content,
-      images: draft.images,
+      content,
+      images,
     })
     await post.save()
     await post.populate('author', 'username displayName avatar')
+
+    // Track hashtags (same bookkeeping as normal posting)
+    const tags = extractHashtags(content)
+    for (const tag of tags) {
+      await Hashtag.findOneAndUpdate(
+        { tag },
+        { $inc: { count: 1 }, $set: { lastUsed: new Date() } },
+        { upsert: true }
+      )
+    }
 
     // Mark draft as published
     draft.status = 'published'

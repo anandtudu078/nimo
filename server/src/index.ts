@@ -3,6 +3,7 @@ import { createServer } from 'http'
 import app from './app'
 import { setupSocketIO } from './config/socket'
 import { initCache } from './config/redis'
+import { startScheduler } from './config/scheduler'
 
 // Boot marker: printed on every start so deployed logs unambiguously show
 // which build is actually running (guards against stale build-cache deploys).
@@ -41,6 +42,10 @@ async function startServer(retries = 3) {
         console.log(`🚀 Server running on http://localhost:${PORT}`)
         console.log(`🔌 Socket.io ready`)
       })
+
+      // Publish scheduled drafts when their time arrives
+      startScheduler()
+
       return // success, exit the function
     } catch (error: any) {
       console.error(`❌ MongoDB connection error (attempt ${attempt}/${retries}):`, error.message)

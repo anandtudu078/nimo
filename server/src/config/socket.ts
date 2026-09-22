@@ -2,6 +2,7 @@ import { Server as HttpServer } from 'http'
 import { Server, Socket } from 'socket.io'
 import { verifyToken } from './jwt'
 import User from '../models/User'
+import { Conversation } from '../models/Message'
 
 interface AuthenticatedSocket extends Socket {
   userId?: string
@@ -70,9 +71,20 @@ export function setupSocketIO(httpServer: HttpServer): Server {
     // Join user's personal room for targeted events
     socket.join(`user:${userId}`)
 
-    // Join a conversation room
-    socket.on('join_conversation', (conversationId: string) => {
-      socket.join(`conversation:${conversationId}`)
+    // Join a conversation room — only participants may join, so outsiders
+    // can't lurk on typing indicators (or spoof them) in private chats.
+    socket.on('join_conversation', async (conversationId: string) => {
+      try {
+        const conversation = await Conversation.findById(conversationId).select('participants')
+        const isParticipant = !!conversation && conversation.participants.some(
+          (p: any) => p.toString() === userId
+        )
+        if (isParticipant) {
+          socket.join(`conversation:${conversationId}`)
+        }
+      } catch {
+        // Bad id or DB hiccup — don't crash the socket; just don't join.
+      }
     })
 
     // Leave a conversation room

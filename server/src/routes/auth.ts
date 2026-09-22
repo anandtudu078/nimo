@@ -8,6 +8,7 @@ import { sendPasswordResetEmail } from '../config/mailer'
 const hashToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex')
 import PasswordReset from '../models/PasswordReset'
 import { auth, AuthRequest, generateToken } from '../middleware/auth'
+import { meLimiter } from '../middleware/rateLimit'
 
 const router = Router()
 
@@ -73,7 +74,7 @@ router.post('/login', async (req: Request, res: Response) => {
 })
 
 // Get current user
-router.get('/me', auth, async (req: AuthRequest, res: Response) => {
+router.get('/me', meLimiter, auth, async (req: AuthRequest, res: Response) => {
   try {
     const user = await User.findById(req.userId)
     if (!user) {

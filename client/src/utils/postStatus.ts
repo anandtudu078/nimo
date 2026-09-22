@@ -53,6 +53,58 @@ export async function fetchPostStatuses(postIds: string[]): Promise<StatusMap> {
   return status
 }
 
+// Batched bookmark lookup for the same page of posts (1 request instead of
+// one GET per card). Returns the subset of postIds the caller has bookmarked.
+export async function fetchBookmarkedPostIds(postIds: string[]): Promise<Set<string>> {
+  if (postIds.length === 0) return new Set()
+  try {
+    const res = await api.post('/posts/check-bookmarks', {
+      postIds: postIds.slice(0, MAX_BATCH),
+    })
+    return new Set((res.data?.bookmarkedPostIds as string[] | undefined) || [])
+  } catch {
+    return new Set()
+  }
+}
+
+// Page-level hook: fetches the viewer status map (and bookmark set) for a
+// list of posts once per page load. Pass the results down to every PostCard
+// on the page so the feed costs 3 requests total instead of 3 per card.
+// `statusRefreshKey` bumps re-resolve card status after repost/reaction
+// toggles (pass a counter you increment from onViewerStatusChange consumers
+// or after actions that change server state).
+export function useFeedStatuses(postIds: string[], enabled: boolean) {
+  const { user } = useAuth()
+  const [statusMap, setStatusMap] = useState<StatusMap>({})
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set())
+
+  // Stable key so a new array literal doesn't re-trigger the fetch
+  const idsKey = postIds.join(',')
+  const postCount = postIds.length
+
+  useEffect(() => {
+    if (!enabled || !user?._id || postCount === 0) {
+      setStatusMap({})
+      setBookmarkedIds(new Set())
+      return
+    }
+    let cancelled = false
+    const ids = idsKey.split(',').filter(Boolean)
+    Promise.all([fetchPostStatuses(ids), fetchBookmarkedPostIds(ids)]).then(
+      ([map, bookmarked]) => {
+        if (cancelled) return
+        setStatusMap(map)
+        setBookmarkedIds(bookmarked)
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [idsKey, postCount, enabled, user?._id])
+
+  return { statusMap, bookmarkedIds }
+}
+
 // Ask every rendered PostCard to re-check its own status. Cheap: React
 // re-runs the cards' status effect keyed on this number.
 export function usePostStatusRefresh(): [number, () => void] {

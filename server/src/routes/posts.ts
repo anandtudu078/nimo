@@ -109,6 +109,30 @@ async function updateHashtags(tags: string[], delta: number) {
   }
 }
 
+// Batch: which of the given posts has the caller bookmarked? One request per
+// feed page instead of one per card (mirrors /reposts/check-multiple).
+router.post('/check-bookmarks', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { postIds } = req.body
+    if (!Array.isArray(postIds) || postIds.length === 0) {
+      return res.json({ bookmarkedPostIds: [] })
+    }
+    if (postIds.length > 200) {
+      return res.status(400).json({ message: 'Too many postIds (max 200)' })
+    }
+    const requested = new Set(
+      postIds.filter((id: unknown) => typeof id === 'string') as string[]
+    )
+    const user = await User.findById(req.userId).select('bookmarks')
+    const bookmarkedPostIds = (user?.bookmarks || [])
+      .map((id: any) => id.toString())
+      .filter((id: string) => requested.has(id))
+    res.json({ bookmarkedPostIds })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to check bookmarks' })
+  }
+})
+
 // Get trending hashtags
 router.get('/trending', auth, async (_req: AuthRequest, res: Response) => {
   try {
@@ -461,8 +485,10 @@ router.delete('/:id', auth, async (req: AuthRequest, res: Response) => {
       Reaction.deleteMany({ post: post._id }),
       View.deleteMany({ post: post._id }),
       Notification.deleteMany({ post: post._id }),
-      // Posts that quoted this one lose their reference (content untouched)
-      Post.updateMany({ quotedPost: post._id }, { $unset: { quotedPost: 1 }, $inc: { shareCount: -1 } }),
+      // Posts that quoted this one lose their reference (content untouched).
+      // Only $unset the ref — the shareCount here belongs to the quoting post
+      // itself (its own reposts), not to this post's total.
+      Post.updateMany({ quotedPost: post._id }, { $unset: { quotedPost: 1 } }),
     ])
 
     await Post.findByIdAndDelete(req.params.id)

@@ -60,6 +60,11 @@ export default function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // Email verification
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null)
+  const [sendingVerification, setSendingVerification] = useState(false)
+  const [verificationMessage, setVerificationMessage] = useState('')
+
   const fetchPrivacy = async () => {
     try {
       const [blockedRes, mutedUsersRes, mutedKeywordsRes] = await Promise.all([
@@ -86,8 +91,26 @@ export default function SettingsPage() {
       profileBanner: (user as any).profileBanner || '',
     })
     fetchPrivacy()
+    // Email verification status drives the resend link in the Account section
+    api
+      .get('/email-verification/status')
+      .then((res) => setEmailVerified(!!res.data.verified))
+      .catch(() => setEmailVerified(null))
     setLoading(false)
   }, [user])
+
+  const handleSendVerification = async () => {
+    setSendingVerification(true)
+    setVerificationMessage('')
+    try {
+      const res = await api.post('/email-verification/send')
+      setVerificationMessage(res.data?.message || 'Verification email sent — check your inbox.')
+    } catch (err: any) {
+      setVerificationMessage(err?.response?.data?.message || 'Failed to send verification email')
+    } finally {
+      setSendingVerification(false)
+    }
+  }
 
   const handleSaveProfile = async () => {
     setSavingProfile(true)
@@ -328,6 +351,19 @@ export default function SettingsPage() {
           <label className="block text-sm font-medium text-gray-400 mb-1">Email</label>
           <input type="email" value={user.email || ''} readOnly className="input-field opacity-60 cursor-not-allowed" />
           <p className="text-xs text-gray-500 mt-1">Your email can't be changed here.</p>
+          {emailVerified === false && (
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <span className="text-xs text-yellow-400">Not verified yet</span>
+              <button
+                onClick={handleSendVerification}
+                disabled={sendingVerification}
+                className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
+              >
+                {sendingVerification ? 'Sending...' : 'Send verification email'}
+              </button>
+              {verificationMessage && <span className="text-xs text-gray-500">{verificationMessage}</span>}
+            </div>
+          )}
         </div>
 
         <h3 className="text-sm font-semibold text-gray-300 mb-3">Change Password</h3>

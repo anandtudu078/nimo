@@ -7,6 +7,7 @@ import { getErrorMessage } from '../utils/errors'
 import Avatar from '../components/Avatar'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useFeedStatuses } from '../utils/postStatus'
 import type { User, Post } from '../types'
 import { formatDistanceToNow } from 'date-fns'
 import { FaCamera, FaTimes, FaTrash, FaBan, FaFlag, FaEnvelope, FaUserPlus, FaUserCheck, FaUserClock } from 'react-icons/fa'
@@ -41,6 +42,12 @@ export default function ProfilePage() {
   const [passwordError, setPasswordError] = useState('')
   const [showReport, setShowReport] = useState(false)
 
+  // Batched viewer status + bookmarks for the profile's post lists
+  const { statusMap, bookmarkedIds } = useFeedStatuses(
+    posts.map((p) => p._id),
+    posts.length > 0
+  )
+
   useEffect(() => {
     if (userId) {
       fetchProfile()
@@ -60,6 +67,12 @@ export default function ProfilePage() {
       setPosts(postsRes.data.posts)
       setLikedPosts(likedRes.data.posts)
       setIsFollowing(userRes.data.user.followers.includes(currentUser?._id))
+
+      // Load the viewer's block state so the button shows Block/Unblock correctly
+      api
+        .get(`/users/${userId}/block-status`)
+        .then((r) => setIsBlocked(!!r.data.blocked))
+        .catch(() => {})
 
       // Map the server status + direction onto a UI state
       const { status, direction } = connRes.data
@@ -607,7 +620,14 @@ export default function ProfilePage() {
             </div>
           ) : (
             posts.map((post) => (
-              <PostCard key={post._id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} />
+              <PostCard
+                key={post._id}
+                post={post}
+                onDelete={handleDeletePost}
+                onEdit={handleEditPost}
+                statusMap={statusMap}
+                bookmarkStatusMap={bookmarkedIds}
+              />
             ))
           )
         ) : (
@@ -617,7 +637,7 @@ export default function ProfilePage() {
             </div>
           ) : (
             likedPosts.map((post) => (
-              <PostCard key={post._id} post={post} />
+              <PostCard key={post._id} post={post} statusMap={statusMap} bookmarkStatusMap={bookmarkedIds} />
             ))
           )
         )}

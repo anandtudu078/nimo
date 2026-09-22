@@ -5,11 +5,14 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorState from '../components/ErrorState'
 import { getErrorMessage } from '../utils/errors'
 import api from '../services/api'
+import { useFeedStatuses } from '../utils/postStatus'
 import type { Post } from '../types'
 
 export default function HashtagPage() {
   const { tag } = useParams<{ tag: string }>()
   const [posts, setPosts] = useState<Post[]>([])
+  // Batched viewer status + bookmarks for the hashtag's post list
+  const { statusMap, bookmarkedIds } = useFeedStatuses(posts.map((p) => p._id), posts.length > 0)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -58,7 +61,14 @@ export default function HashtagPage() {
         </div>
       ) : (
         posts.map((post) => (
-          <PostCard key={post._id} post={post} onDelete={handleDeletePost} onEdit={handleEditPost} />
+          <PostCard
+            key={post._id}
+            post={post}
+            onDelete={handleDeletePost}
+            onEdit={handleEditPost}
+            statusMap={statusMap}
+            bookmarkStatusMap={bookmarkedIds}
+          />
         ))
       )}
     </div>
