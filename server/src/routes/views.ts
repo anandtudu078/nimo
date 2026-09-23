@@ -39,22 +39,11 @@ router.get('/user/analytics', auth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId
 
-    // Total views across all posts
-    const totalViews = await View.aggregate([
-      {
-        $lookup: {
-          from: 'posts',
-          localField: 'post',
-          foreignField: '_id',
-          as: 'postData',
-        },
-      },
-      { $unwind: '$postData' },
-      { $match: { 'postData.author': userId } },
-      { $count: 'total' },
-    ])
-
-    // Total likes across all posts
+    // Total views across all posts (viewCount on Post is the maintained
+    // counter; the View collection only stores unique first-views per user,
+    // so counting documents would undercount). The old pre-aggregation here
+    // was dead code: its result was never read, and its $match compared a
+    // string against an ObjectId so it could never match.
     const posts = await Post.find({ author: userId }).select('likes viewCount')
     const totalLikes = posts.reduce((sum, p) => sum + p.likes.length, 0)
     const totalPostViews = posts.reduce((sum, p) => sum + (p.viewCount || 0), 0)

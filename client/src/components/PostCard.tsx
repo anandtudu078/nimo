@@ -31,8 +31,8 @@ interface PostCardProps {
   onQuote?: (post: Post) => void
   /** Lets PostCard push viewer-status changes (repost/reaction toggles) back into the list's shared map */
   onViewerStatusChange?: React.Dispatch<React.SetStateAction<Record<string, { reposted: boolean; reaction: string | null }>>>
-  /** Viewer status map for the enclosing list (batched: 2 requests per page instead of 2 per card) */
-  statusMap?: Record<string, { reposted: boolean; reaction: string | null }>
+  /** Viewer status map for the enclosing list (batched: 2 requests per page instead of 2 per card). null = still loading */
+  statusMap?: Record<string, { reposted: boolean; reaction: string | null }> | null
   /** Bump to make cards re-check their viewer status (call after repost/reaction toggles) */
   statusRefreshKey?: number
   /** Bookmarked-post ids for the enclosing list (batched: 1 request per page) */
@@ -128,19 +128,34 @@ export default function PostCard({ post, onDelete, onEdit, onQuote, statusMap, s
   const [showRepostMenu, setShowRepostMenu] = useState(false)
   const [showQuoteModal, setShowQuoteModal] = useState(false)
 
-  const { reposted, reaction: userReaction } = usePostCardStatus(post._id, statusMap, statusRefreshKey)
+  const statusFromMap = usePostCardStatus(post._id, statusMap, statusRefreshKey)
+  // Local optimistic override: toggling repost/reaction updates the UI
+  // immediately. Most list pages don't pass onViewerStatusChange, so without
+  // this the card kept showing the stale server state until a full refetch.
+  const [localStatus, setLocalStatus] = useState<{ reposted: boolean; reaction: string | null } | null>(null)
+  const reposted = localStatus ? localStatus.reposted : statusFromMap.reposted
+  const userReaction = localStatus ? localStatus.reaction : statusFromMap.reaction
 
   // Track the list's batched bookmark map (e.g. after it refetches)
   useEffect(() => {
     if (bookmarkStatusMap) setBookmarked(bookmarkStatusMap.has(post._id))
   }, [bookmarkStatusMap, post._id])
   const setReposted = (updater: boolean | ((prev: boolean) => boolean)) => {
+    setLocalStatus((prev) => {
+      const base = prev ?? { reposted: statusFromMap.reposted, reaction: statusFromMap.reaction }
+      return { ...base, reposted: typeof updater === 'function' ? updater(base.reposted) : updater }
+    })
+    // Keep the list's shared map in sync when a parent consumes it
     onViewerStatusChange?.((prev) => ({
       ...prev,
       [post._id]: { reposted: typeof updater === 'function' ? updater(prev[post._id]?.reposted ?? false) : updater, reaction: prev[post._id]?.reaction ?? null },
     }))
   }
   const setUserReaction = (updater: string | null | ((prev: string | null) => string | null)) => {
+    setLocalStatus((prev) => {
+      const base = prev ?? { reposted: statusFromMap.reposted, reaction: statusFromMap.reaction }
+      return { ...base, reaction: typeof updater === 'function' ? updater(base.reaction) : updater }
+    })
     onViewerStatusChange?.((prev) => ({
       ...prev,
       [post._id]: { reposted: prev[post._id]?.reposted ?? false, reaction: typeof updater === 'function' ? updater(prev[post._id]?.reaction ?? null) : updater },

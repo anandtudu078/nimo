@@ -70,26 +70,38 @@ export async function fetchBookmarkedPostIds(postIds: string[]): Promise<Set<str
 // Page-level hook: fetches the viewer status map (and bookmark set) for a
 // list of posts once per page load. Pass the results down to every PostCard
 // on the page so the feed costs 3 requests total instead of 3 per card.
+// `extraPostIds` merges a second list (e.g. the Likes tab on ProfilePage)
+// into the same batched fetch — without it, cards from that list silently
+// fall back to one status request per card.
 // `statusRefreshKey` bumps re-resolve card status after repost/reaction
 // toggles (pass a counter you increment from onViewerStatusChange consumers
 // or after actions that change server state).
-export function useFeedStatuses(postIds: string[], enabled: boolean) {
+export function useFeedStatuses(
+  postIds: string[],
+  enabled: boolean,
+  extraPostIds: string[] = []
+) {
   const { user } = useAuth()
-  const [statusMap, setStatusMap] = useState<StatusMap>({})
+  // null = status not fetched yet (lets PostCard skip its solo fetch instead
+  // of firing one request per card while the batch request is in flight)
+  const [statusMap, setStatusMap] = useState<StatusMap | null>(null)
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set())
 
-  // Stable key so a new array literal doesn't re-trigger the fetch
+  // Stable keys so new array literals don't re-trigger the fetch
   const idsKey = postIds.join(',')
   const postCount = postIds.length
+  const extraIdsKey = extraPostIds.join(',')
+  const extraCount = extraPostIds.length
 
   useEffect(() => {
-    if (!enabled || !user?._id || postCount === 0) {
-      setStatusMap({})
+    if (!enabled || !user?._id || (postCount === 0 && extraCount === 0)) {
+      setStatusMap(null)
       setBookmarkedIds(new Set())
       return
     }
     let cancelled = false
-    const ids = idsKey.split(',').filter(Boolean)
+    // Dedupe the union — a post can appear in both lists
+    const ids = [...new Set([...idsKey.split(',').filter(Boolean), ...extraIdsKey.split(',').filter(Boolean)])]
     Promise.all([fetchPostStatuses(ids), fetchBookmarkedPostIds(ids)]).then(
       ([map, bookmarked]) => {
         if (cancelled) return
@@ -100,7 +112,7 @@ export function useFeedStatuses(postIds: string[], enabled: boolean) {
     return () => {
       cancelled = true
     }
-  }, [idsKey, postCount, enabled, user?._id])
+  }, [idsKey, postCount, extraIdsKey, extraCount, enabled, user?._id])
 
   return { statusMap, bookmarkedIds }
 }
@@ -123,21 +135,25 @@ export function usePostCardStatus(
 ): PostStatus {
   const { user } = useAuth()
   const [status, setStatus] = useState<PostStatus>(EMPTY)
-  const [selfLoaded, setSelfLoaded] = useState(false)
 
-  const fromMap = postId ? statusMap?.[postId] : undefined
-  const useMap = !!(user?._id && fromMap)
+  const mapProvided = statusMap !== undefined && statusMap !== null
+  const fromMap = postId && statusMap ? statusMap[postId] : undefined
+  const useMap = !!(user?._id && mapProvided && fromMap)
 
   useEffect(() => {
     if (useMap) {
       setStatus(fromMap!)
       return
     }
-    // Solo fallback: single-card usage without a batch map
+    // A page-provided map that hasn't loaded yet (null): wait for it instead
+    // of solo-fetching — that's the per-card request burst batching prevents.
+    if (mapProvided) return
+    // Solo fallback: single-card usage without a batch map (post detail,
+    // search results). Keyed on refreshTick: cards re-check after the viewer
+    // reposts/reacts. NOTE: no selfLoaded-style state in the deps — including
+    // a flag the effect itself toggles re-triggers the effect forever.
     if (!user?._id || !postId) return
     let cancelled = false
-    setSelfLoaded(false)
-    // Keyed on refreshTick: cards re-check after the viewer reposts/reacts
     Promise.all([
       api.get(`/reposts/check/${postId}`).catch(() => null),
       api.get(`/reactions/${postId}`).catch(() => null),
@@ -152,13 +168,12 @@ export function usePostCardStatus(
         }
       }
       setStatus({ reposted, reaction })
-      setSelfLoaded(true)
     })
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [postId, user?._id, refreshTick, useMap, selfLoaded])
+  }, [postId, user?._id, refreshTick, useMap, mapProvided])
 
   return status
 }
