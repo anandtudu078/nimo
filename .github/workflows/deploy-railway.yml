@@ -1,0 +1,59 @@
+name: Deploy backend to Railway
+
+# Railway's GitHub auto-deploy webhook silently stopped firing (deploys went
+# stale while merges kept landing on main). This workflow deploys the backend
+# directly via the Railway CLI, so pushes to main always reach production.
+#
+# One-time setup (repo owner):
+#   1. Railway dashboard -> project -> Settings -> "Generate Token"
+#      (environment token for the production environment)
+#   2. GitHub repo -> Settings -> Secrets and variables -> Actions:
+#        - New repository secret:   RAILWAY_TOKEN = <token from step 1>
+#        - New repository variable: RAILWAY_SERVICE_NAME = <service name in
+#          Railway, e.g. "nimo-production" (exact name shown in the dashboard)>
+#   3. Re-run this workflow from the Actions tab (or push to main).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'Dockerfile'
+      - 'railway.toml'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-railway.yml'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for required config
+        env:
+          HAS_TOKEN: ${{ secrets.RAILWAY_TOKEN != '' }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::error::RAILWAY_TOKEN secret is not set. See the setup steps in .github/workflows/deploy-railway.yml"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE_NAME: ${{ vars.RAILWAY_SERVICE_NAME }}
+        run: |
+          if [ -z "$RAILWAY_SERVICE_NAME" ]; then
+            railway up --ci
+          else
+            railway up --service "$RAILWAY_SERVICE_NAME" --ci
+          fi
