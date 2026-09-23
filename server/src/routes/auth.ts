@@ -32,8 +32,10 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const existingUser = await User.findOne({ $or: [{ email: normalizedEmail }, { username }] })
     if (existingUser) {
+      // Compare against the normalized email — the raw input may differ only
+      // in case, which used to make an email collision report "Username taken".
       return res.status(400).json({
-        message: existingUser.email === email ? 'Email already registered' : 'Username already taken',
+        message: existingUser.email === normalizedEmail ? 'Email already registered' : 'Username already taken',
       })
     }
 

@@ -42,10 +42,13 @@ export default function ProfilePage() {
   const [passwordError, setPasswordError] = useState('')
   const [showReport, setShowReport] = useState(false)
 
-  // Batched viewer status + bookmarks for the profile's post lists
+  // Batched viewer status + bookmarks for both post lists (Posts + Likes) —
+  // merging the liked posts into one fetch keeps the Likes tab from falling
+  // back to one status request per card.
   const { statusMap, bookmarkedIds } = useFeedStatuses(
     posts.map((p) => p._id),
-    posts.length > 0
+    posts.length > 0,
+    likedPosts.map((p) => p._id)
   )
 
   useEffect(() => {

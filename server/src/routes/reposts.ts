@@ -8,6 +8,26 @@ import { auth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
+// Batch repost check — MUST be declared before POST /:postId, otherwise
+// Express matches "check-multiple" as a :postId param and the toggle handler
+// CastErrors on Post.findById("check-multiple") (500 on every feed page).
+router.post('/check-multiple', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { postIds } = req.body
+    if (!Array.isArray(postIds) || postIds.length === 0) {
+      return res.json({ repostedPostIds: [] })
+    }
+    const reposts = await Repost.find({
+      user: req.userId,
+      originalPost: { $in: postIds },
+    }).select('originalPost')
+    const repostedPostIds = reposts.map((r) => r.originalPost.toString())
+    res.json({ repostedPostIds })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to check multiple reposts' })
+  }
+})
+
 // Toggle repost (share/unshare)
 router.post('/:postId', auth, async (req: AuthRequest, res: Response) => {
   try {
@@ -57,27 +77,6 @@ router.get('/check/:postId', auth, async (req: AuthRequest, res: Response) => {
     res.json({ reposted: !!existing })
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to check repost status' })
-  }
-})
-
-// Check multiple posts for repost status — one request per feed page instead
-// of one per card. A batch route with a bare path segment can't collide with
-// GET /check/:postId or GET /:postId (different method + shape), but it must
-// stay declared before GET /:postId so "check-multiple" is never parsed as an id.
-router.post('/check-multiple', auth, async (req: AuthRequest, res: Response) => {
-  try {
-    const { postIds } = req.body
-    if (!Array.isArray(postIds) || postIds.length === 0) {
-      return res.json({ repostedPostIds: [] })
-    }
-    const reposts = await Repost.find({
-      user: req.userId,
-      originalPost: { $in: postIds },
-    }).select('originalPost')
-    const repostedPostIds = reposts.map((r) => r.originalPost.toString())
-    res.json({ repostedPostIds })
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || 'Failed to check multiple reposts' })
   }
 })
 
